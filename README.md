@@ -1,46 +1,44 @@
-# SSI Inventory Management System (Local-Run Web App)
+# SSI Inventory Management System v9
+## Shree Sai Industries — Production Ready
 
-This project is a **front-end only** inventory + sales order + dispatch system.
+### 🔐 Default Login Credentials
+| Role     | Username   | Password     |
+|----------|------------|--------------|
+| Admin    | admin      | admin123     |
+| Stock    | stock1     | stock123     |
+| Dispatch | dispatch1  | dispatch123  |
+| Sales 1  | sales1     | sales123     |
+| Sales 2  | sales2     | sales123     |
 
-## What it is
-- Runs locally in a browser
-- Stores data in your browser using **LocalStorage**
-- Has role-based screens and **salesperson isolation** logic
-
-## What it is NOT
-- Not a server/database app (no MySQL/Postgres)
-- No backend authentication—passwords are stored locally (for demo/MVP use)
-
-If you need a production version (multi-device, centralized database, backups, audit logs), we can convert this to a proper backend later.
-
-## Default Login
-- Username: `admin`
-- Password: `admin123`
-
-## How to run
-### Option A (simplest)
-Just open `index.html` in Chrome.
-
-### Option B (recommended: local web server)
-If you have Python:
+### 🚀 Quick Start (Local)
+**Mac/Linux:**
 ```bash
+cd ~/Downloads/ssi-inventory-v9
+python3 -m http.server 8000
+```
+**Windows:**
+```cmd
+cd C:\Users\YourName\Downloads\ssi-inventory-v9
 python -m http.server 8000
 ```
-Then open:
-- http://localhost:8000
+Open browser → http://localhost:8000
 
-## Roles
-- Admin (full access)
-- Stock Department
-- Dispatch Department
-- Salesperson (can only see their own orders)
+### 🌐 Deployed URL
+https://ssi-inventory-hmwp.onrender.com
 
-## Units
-- Unit 1: Modinagar
-- Unit 2: Patla
+### 📋 Feature Summary
+- ✅ Role-based access (Admin / Sales / Stock / Dispatch)
+- ✅ Products with SKU, pack sizes, carton standard, reorder alerts
+- ✅ Clients/Vendors with GST Number, address, phone
+- ✅ Smart Inventory IN/OUT (Bags × Size, Cartons, Direct KG, NOS)
+- ✅ Sales Orders (Bag × Count = Total KG, Urgent flag)
+- ✅ Salesperson sees ONLY own orders + dispatch status
+- ✅ Dispatch queue (Urgent first → FIFO) + History
+- ✅ Demand Analysis (product trends, top clients)
+- ✅ Monthly reports + Salesperson performance
+- ✅ Excel import/export everywhere
+- ✅ Multi-currency (INR/USD/EUR/GBP)
 
-## Notes
-- Currency dropdown: INR (default), USD, EUR, GBP
-- UoM: KG (default) + NOS
-- Pack sizes: 100g, 200g, 500g, 1kg, 30kg, 40kg, 50kg
-
+### 🔄 To Deploy on Render.com
+1. Replace files in GitHub repo (PraveenMegh/ssi-inventory)
+2. Render auto-deploys on push

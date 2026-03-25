@@ -1,48 +1,79 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>SSI Inventory</title>
-  <link rel="icon" type="image/png" href="ssi-favicon.png" />
-  <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="description" content="Shree Sai Industries — Inventory Management System">
+  <meta name="theme-color" content="#e11d2e">
+  <title>SSI Inventory — Shree Sai Industries</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23e11d2e'/><text y='.9em' font-size='60' x='50%' dominant-baseline='middle' text-anchor='middle' fill='white' font-weight='900'>S</text></svg>">
+
+  <!-- Tailwind CSS (utility fallback) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- SheetJS for Excel support -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
   <style>
-    :root{--brand:#e11d2e}
-    html,body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
-    .brand{color:var(--brand)}
-    .bg-brand{background:var(--brand)}
-    .ring-brand{--tw-ring-color:var(--brand)}
-    .nav-active{background:rgba(225,29,46,.10);border-left:3px solid var(--brand)}
-    .chip{display:inline-flex;align-items:center;gap:.5rem;padding:.25rem .6rem;border-radius:999px;font-size:.75rem;font-weight:600}
-    .chip-urgent{background:rgba(225,29,46,.12);color:#b42318}
-    .chip-ok{background:rgba(16,185,129,.14);color:#047857}
-    .chip-warn{background:rgba(245,158,11,.18);color:#92400e}
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: 'Inter', -apple-system, sans-serif; background: #f1f5f9; }
+    #app { min-height: 100vh; }
+    /* Mobile meta PWA */
+    @media (max-width: 480px) {
+      html { font-size: 15px; }
+    }
   </style>
-  <!-- SheetJS for Excel read/write -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
-<body class="bg-slate-50 text-slate-900">
-  <div id="app"></div>
+<body>
+  <div id="app">
+    <!-- Loading spinner while JS initializes -->
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a1a2e,#0f3460);">
+      <div style="text-align:center;color:#fff;">
+        <div style="width:64px;height:64px;background:#e11d2e;border-radius:16px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:22px;margin:0 auto 20px;animation:pulse 1s infinite;">SSI</div>
+        <p style="font-size:14px;color:#94a3b8;">Loading...</p>
+      </div>
+    </div>
+  </div>
 
-  <script src="app.js"></script>
-  <script src="auth.js"></script>
-  <script src="users.js"></script>
-  <script src="units.js"></script>
-  <script src="products.js"></script>
-  <script src="clients.js"></script>
-  <script src="inventory.js"></script>
-  <script src="sales-orders.js"></script>
-  <script src="dispatch.js"></script>
-  <script src="reports.js"></script>
-  <script src="dashboard.js"></script>
+  <style>
+    @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
+  </style>
 
+  <!-- Core modules (order matters) -->
+  <script src="js/app.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/units.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/products.js"></script>
+  <script src="js/clients.js"></script>
+  <script src="js/inventory.js"></script>
+  <script src="js/orders.js"></script>
+  <script src="js/dispatch.js"></script>
+  <script src="js/reports.js"></script>
+  <script src="js/users.js"></script>
 
   <script>
-    // Boot
-    SSIApp.bootstrap();
+    // Bootstrap after all modules load
+    document.addEventListener('DOMContentLoaded', () => {
+      try {
+        SSIApp.bootstrap();
+      } catch(e) {
+        console.error('Bootstrap error:', e);
+        document.getElementById('app').innerHTML = `
+          <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;">
+            <div style="background:#fff;border-radius:12px;padding:32px;max-width:400px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.1);">
+              <div style="font-size:48px;margin-bottom:16px;">⚠️</div>
+              <h2 style="color:#dc2626;margin-bottom:8px;">Initialization Error</h2>
+              <p style="color:#64748b;font-size:14px;margin-bottom:20px;">${e.message}</p>
+              <button onclick="localStorage.clear();location.reload()" style="background:#e11d2e;color:#fff;border:none;padding:12px 24px;border-radius:8px;cursor:pointer;font-weight:700;">
+                Reset & Reload
+              </button>
+            </div>
+          </div>`;
+      }
+    });
   </script>
 </body>
 </html>

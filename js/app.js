@@ -116,7 +116,7 @@ const SSIApp = (() => {
       <div class="bg-white border-b border-slate-200">
         <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div class="flex items-center gap-3">
-            <img src="assets/ssi-logo-red-white.png" alt="SSI"
+            <img src="ssi-logo-red-white.png" alt="SSI"
               class="w-12 h-12 rounded-xl object-contain bg-white"
               onerror="this.style.display='none'; document.getElementById('hdrLogoFb').style.display='flex'" />
             <div id="hdrLogoFb" style="display:none"

@@ -1,448 +1,488 @@
-/* global SSIApp */
-
+/* SSI Inventory Module - Smart Entry */
 const SSIInventory = (() => {
-  const TYPES = ['OPENING','IN','OUT','ADJUST','TRANSFER_OUT','TRANSFER_IN'];
+  const ENTRY_TYPES = [
+    { value:'OPENING',     label:'📂 Opening Stock' },
+    { value:'IN',          label:'📥 Stock IN (Received)' },
+    { value:'OUT',         label:'📤 Stock OUT (Issued)' },
+    { value:'ADJUST',      label:'🔧 Adjustment' },
+    { value:'TRANSFER_OUT',label:'↗️ Transfer OUT' },
+    { value:'TRANSFER_IN', label:'↙️ Transfer IN' },
+  ];
 
-  const calcBalance = (st, unit_id, product_id) => {
-    let bal = 0;
-    for (const t of st.inventory_txn) {
-      if (t.unit_id !== unit_id) continue;
-      if (t.product_id !== product_id) continue;
-      if (['OPENING','IN','TRANSFER_IN','ADJUST'].includes(t.type)) bal += Number(t.qty||0);
-      if (['OUT','TRANSFER_OUT'].includes(t.type)) bal -= Number(t.qty||0);
+  const PACK_MODES = [
+    { value:'BAG',         label:'🛍️ KG Bags (Size × Count)' },
+    { value:'CARTON_STD',  label:'📦 Cartons – Use Product Std' },
+    { value:'CARTON_MAN',  label:'📦 Cartons – Enter KG/Carton' },
+    { value:'DIRECT_KG',   label:'⚖️ Direct KG Entry' },
+    { value:'NOS',         label:'🔢 Units / NOS' },
+  ];
+
+  function render(area) {
+    if (!SSIApp.hasRole('ADMIN','STOCK')) {
+      area.innerHTML = '<div class="empty-state"><div class="icon">🔒</div><p>Access Denied</p></div>';
+      return;
     }
-    return bal;
-  };
+    refresh(area);
+  }
 
-  const render = () => {
-    if (!SSIApp.requireRole(['ADMIN','STOCK','DISPATCH'])) return SSIApp.toast('Not allowed', 'err');
+  function refresh(area) {
     const st = SSIApp.getState();
+    const ledger = [...st.inventory].sort((a,b) => new Date(b.date) - new Date(a.date));
 
-    const unitOpts = st.units.map(u=>`<option value="${u.id}">${u.name}</option>`).join('');
-    const prodOpts = st.products.map(p=>`<option value="${p.id}">${p.name} (${p.uom||'KG'})</option>`).join('');
-
-    const balances = st.units.flatMap(u => st.products.map(p => {
-      const b = calcBalance(st, u.id, p.id);
-      const low = (p.reorder_level!=null && b <= p.reorder_level);
-      return { unit:u, product:p, bal:b, low };
-    }));
-
-    const balanceRows = balances.map(x=>`
-      <tr class="border-t">
-        <td class="py-2 pr-3">${x.unit.name}</td>
-        <td class="py-2 pr-3 font-semibold">${x.product.name}</td>
-        <td class="py-2 pr-3">
-          <span class="chip ${x.product.uom==='NOS'?'chip-warn':'chip-ok'}">${x.product.uom||'KG'}</span>
-        </td>
-        <td class="py-2 pr-3 text-xs text-slate-500">${(x.product.pack_sizes||[]).join(', ')||'-'}</td>
-        <td class="py-2 pr-3 font-semibold ${x.low?'text-rose-700':''}">${x.bal.toFixed(3)}</td>
-        <td class="py-2 pr-3">${x.low ? '<span class="chip chip-urgent">⚠️ Low</span>' : '<span class="chip chip-ok">✅ OK</span>'}</td>
-      </tr>`).join('');
-
-    const txRows = st.inventory_txn.slice(0,80).map(t => {
-      const u = st.units.find(x=>x.id===t.unit_id);
-      const p = st.products.find(x=>x.id===t.product_id);
-      const packInfo = t.pack_desc ? `<span class="text-xs text-slate-400 ml-1">(${t.pack_desc})</span>` : '';
-      return `
-        <tr class="border-t">
-          <td class="py-2 pr-3 text-slate-600">${t.date}</td>
-          <td class="py-2 pr-3">
-            <span class="chip ${t.type==='OUT'||t.type==='TRANSFER_OUT'?'chip-warn':t.type==='OPENING'?'chip-ok':t.type==='ADJUST'?'chip-urgent':'chip-ok'}">${t.type}</span>
-          </td>
-          <td class="py-2 pr-3">${u?.name || '-'}</td>
-          <td class="py-2 pr-3 font-semibold">${p?.name || '-'}</td>
-          <td class="py-2 pr-3">${Number(t.qty||0).toFixed(3)} ${p?.uom||'KG'}${packInfo}</td>
-          <td class="py-2 pr-3 text-slate-600">${t.note || ''}</td>
-        </tr>`;
-    }).join('');
-
-    const content = `
-      <div class="grid grid-cols-1 gap-5">
-        <div class="bg-white border border-slate-200 rounded-2xl p-5">
-          <div class="flex items-center justify-between">
-            <div>
-              <div class="text-lg font-extrabold">Inventory</div>
-              <div class="text-sm text-slate-500">Ledger-based stock. Opening stock, IN, OUT, Adjustments, Transfers.</div>
-            </div>
-            <button id="btnAddTxn" class="px-4 py-2 rounded-xl bg-rose-600 text-white font-semibold hover:bg-rose-700">+ Add Entry</button>
-          </div>
-
-          <div class="mt-4 overflow-auto">
-            <table class="w-full text-sm">
-              <thead class="text-left text-slate-500 bg-slate-50">
-                <tr>
-                  <th class="py-2 pr-3 pl-2">Unit</th>
-                  <th class="py-2 pr-3">Product</th>
-                  <th class="py-2 pr-3">UoM</th>
-                  <th class="py-2 pr-3">Pack Sizes</th>
-                  <th class="py-2 pr-3">Balance</th>
-                  <th class="py-2 pr-3">Status</th>
-                </tr>
-              </thead>
-              <tbody>${balanceRows}</tbody>
-            </table>
-            ${st.products.length===0 ? `<div class="text-sm text-slate-500 py-4">Add products first (Admin → Products).</div>`:''}
-          </div>
+    area.innerHTML = `
+      <div class="page-header">
+        <h2 class="page-title">🏭 Inventory Ledger</h2>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="SSIInventory.exportExcel()">📤 Export</button>
+          <button class="btn btn-primary" onclick="SSIInventory.openEntryModal()">+ Add Entry</button>
         </div>
+      </div>
 
-        <div class="bg-white border border-slate-200 rounded-2xl p-5">
-          <div class="text-lg font-extrabold">Recent Transactions</div>
-          <div class="mt-3 overflow-auto">
-            <table class="w-full text-sm">
-              <thead class="text-left text-slate-500 bg-slate-50">
-                <tr>
-                  <th class="py-2 pr-3 pl-2">Date</th>
-                  <th class="py-2 pr-3">Type</th>
-                  <th class="py-2 pr-3">Unit</th>
-                  <th class="py-2 pr-3">Product</th>
-                  <th class="py-2 pr-3">Qty (Pack Info)</th>
-                  <th class="py-2 pr-3">Note</th>
-                </tr>
-              </thead>
-              <tbody>${txRows || ''}</tbody>
-            </table>
+      <!-- Filters -->
+      <div class="card" style="margin-bottom:16px;padding:16px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">
+          <div>
+            <label>Filter by Unit</label>
+            <select id="inv-filter-unit" onchange="SSIInventory.applyFilter()">
+              <option value="">All Units</option>
+              ${st.units.filter(u=>u.active).map(u=>`<option value="${u.id}">${u.name}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label>Filter by Product</label>
+            <select id="inv-filter-product" onchange="SSIInventory.applyFilter()">
+              <option value="">All Products</option>
+              ${st.products.filter(p=>p.active).map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label>Filter by Type</label>
+            <select id="inv-filter-type" onchange="SSIInventory.applyFilter()">
+              <option value="">All Types</option>
+              ${ENTRY_TYPES.map(t=>`<option value="${t.value}">${t.label}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label>From Date</label>
+            <input type="date" id="inv-filter-from" onchange="SSIInventory.applyFilter()">
+          </div>
+          <div>
+            <label>To Date</label>
+            <input type="date" id="inv-filter-to" onchange="SSIInventory.applyFilter()">
           </div>
         </div>
       </div>
 
-      ${modalHtml(unitOpts, prodOpts)}
-    `;
-
-    SSIApp.render(SSIApp.shell(content, 'inventory'));
-    SSIApp.bindShellEvents();
-
-    document.getElementById('btnAddTxn').addEventListener('click', ()=>openModal());
-    bindModalEvents();
-  };
-
-  // ── SMART MODAL ────────────────────────────────────────────────
-  const modalHtml = (unitOpts, prodOpts) => `
-    <div id="txnModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center p-4 z-40">
-      <div class="w-full max-w-2xl bg-white rounded-2xl border border-slate-200 shadow-lg p-5">
-        <div class="flex items-center justify-between mb-4">
-          <div>
-            <div class="text-lg font-extrabold">Add Inventory Entry</div>
-            <div class="text-xs text-slate-500">Select product → pack type auto-loads → qty auto-calculates</div>
-          </div>
-          <button id="txnModalClose" class="px-3 py-1.5 rounded-lg border hover:bg-slate-50">Close</button>
+      <div class="card">
+        <div style="overflow-x:auto;">
+          <table id="inv-table">
+            <thead><tr>
+              <th>Date</th><th>Type</th><th>Unit</th><th>Product</th>
+              <th>Pack Mode</th><th style="text-align:right;">Qty (KG/NOS)</th>
+              <th>Bill / Note</th><th>By</th>
+              ${SSIApp.hasRole('ADMIN') ? '<th>Del</th>' : ''}
+            </tr></thead>
+            <tbody id="inv-tbody">
+              ${renderRows(ledger, st)}
+            </tbody>
+          </table>
         </div>
+        <div id="inv-count" style="margin-top:12px;font-size:13px;color:#94a3b8;">Total: ${ledger.length} entries</div>
+      </div>`;
+  }
 
-        <!-- Row 1: Date + Type -->
-        <div class="grid grid-cols-2 gap-3 text-sm">
+  function renderRows(ledger, st) {
+    if (!ledger.length) return `<tr><td colspan="9" style="text-align:center;padding:40px;color:#94a3b8;">No inventory entries yet. Add your first entry!</td></tr>`;
+    const typeColors = {IN:'#dcfce7',OUT:'#fee2e2',OPENING:'#dbeafe',ADJUST:'#fef3c7',TRANSFER_OUT:'#fce7f3',TRANSFER_IN:'#ede9fe'};
+    const typeTextColors = {IN:'#166534',OUT:'#991b1b',OPENING:'#1e40af',ADJUST:'#92400e',TRANSFER_OUT:'#9d174d',TRANSFER_IN:'#5b21b6'};
+    return ledger.map(t => {
+      const prod = st.products.find(p=>p.id===t.product_id);
+      const unit = st.units.find(u=>u.id===t.unit_id);
+      const user = st.users.find(u=>u.id===t.user_id);
+      const bg = typeColors[t.type] || '#f1f5f9';
+      const tc = typeTextColors[t.type] || '#374151';
+      const isOut = ['OUT','TRANSFER_OUT'].includes(t.type);
+      return `<tr data-unit="${t.unit_id}" data-product="${t.product_id}" data-type="${t.type}" data-date="${t.date}">
+        <td style="white-space:nowrap;">${SSIApp.dateFmt(t.date)}</td>
+        <td><span style="background:${bg};color:${tc};padding:3px 8px;border-radius:6px;font-size:12px;font-weight:600;">${t.type}</span></td>
+        <td style="font-size:13px;">${unit?.name||'—'}</td>
+        <td><strong>${prod?.name||'—'}</strong><br><span style="font-size:11px;color:#94a3b8;">${prod?.sku||''}</span></td>
+        <td style="font-size:12px;color:#64748b;">${t.pack_desc||'—'}</td>
+        <td style="text-align:right;font-weight:700;color:${isOut?'#dc2626':'#16a34a'};">${isOut?'-':'+'} ${SSIApp.qtyFmt(t.qty)} ${prod?.uom||'KG'}</td>
+        <td style="font-size:12px;color:#64748b;max-width:150px;">${t.note||'—'}</td>
+        <td style="font-size:12px;color:#94a3b8;">${user?.name||t.user_name||'—'}</td>
+        ${SSIApp.hasRole('ADMIN') ? `<td><button class="btn btn-danger btn-sm" onclick="SSIInventory.deleteEntry('${t.id}')">🗑️</button></td>` : ''}
+      </tr>`;
+    }).join('');
+  }
+
+  function applyFilter() {
+    const unitF    = document.getElementById('inv-filter-unit')?.value    || '';
+    const prodF    = document.getElementById('inv-filter-product')?.value || '';
+    const typeF    = document.getElementById('inv-filter-type')?.value    || '';
+    const fromF    = document.getElementById('inv-filter-from')?.value    || '';
+    const toF      = document.getElementById('inv-filter-to')?.value      || '';
+    const rows     = document.querySelectorAll('#inv-tbody tr[data-unit]');
+    let visible = 0;
+    rows.forEach(row => {
+      const show = (!unitF || row.dataset.unit===unitF)
+        && (!prodF || row.dataset.product===prodF)
+        && (!typeF || row.dataset.type===typeF)
+        && (!fromF || row.dataset.date >= fromF)
+        && (!toF   || row.dataset.date <= toF);
+      row.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    const cnt = document.getElementById('inv-count');
+    if (cnt) cnt.textContent = `Showing: ${visible} entries`;
+  }
+
+  function openEntryModal(prefillProductId, prefillUnitId) {
+    const st = SSIApp.getState();
+    const html = `
+      <div class="modal-header">
+        <h3 style="font-size:18px;font-weight:700;">📥 Add Inventory Entry</h3>
+        <button onclick="SSIApp.closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b;">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid form-grid-2" style="margin-bottom:16px;">
           <div>
-            <label class="font-semibold">Date</label>
-            <input id="tDate" type="date" class="mt-1 w-full px-3 py-2 rounded-xl border" />
+            <label>Date *</label>
+            <input type="date" id="inv-date" value="${new Date().toISOString().slice(0,10)}">
           </div>
           <div>
-            <label class="font-semibold">Entry Type</label>
-            <select id="tType" class="mt-1 w-full px-3 py-2 rounded-xl border">
-              <option value="OPENING">📂 OPENING (Opening Stock)</option>
-              <option value="IN">📥 IN (Stock Received)</option>
-              <option value="OUT">📤 OUT (Stock Issued)</option>
-              <option value="ADJUST">🔧 ADJUST (Correction)</option>
-              <option value="TRANSFER_OUT">➡️ TRANSFER OUT</option>
-              <option value="TRANSFER_IN">⬅️ TRANSFER IN</option>
+            <label>Entry Type *</label>
+            <select id="inv-type">
+              ${ENTRY_TYPES.map(t=>`<option value="${t.value}">${t.label}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label>SSI Unit *</label>
+            <select id="inv-unit" onchange="SSIInventory.onProductUnitChange()">
+              <option value="">— Select Unit —</option>
+              ${st.units.filter(u=>u.active).map(u=>`<option value="${u.id}" ${u.id===prefillUnitId?'selected':''}>${u.name}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label>Product *</label>
+            <select id="inv-product" onchange="SSIInventory.onProductUnitChange()">
+              <option value="">— Select Product —</option>
+              ${st.products.filter(p=>p.active).map(p=>`<option value="${p.id}" ${p.id===prefillProductId?'selected':''}>${p.name} (${p.uom||'KG'})</option>`).join('')}
             </select>
           </div>
         </div>
 
-        <!-- Row 2: Unit + Product -->
-        <div class="grid grid-cols-2 gap-3 mt-3 text-sm">
-          <div>
-            <label class="font-semibold">Unit / Location</label>
-            <select id="tUnit" class="mt-1 w-full px-3 py-2 rounded-xl border">${unitOpts}</select>
-          </div>
-          <div>
-            <label class="font-semibold">Product</label>
-            <select id="tProd" class="mt-1 w-full px-3 py-2 rounded-xl border">${prodOpts}</select>
+        <!-- Product Info Card -->
+        <div id="inv-info-card" style="display:none;" class="info-card">
+          <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;">
+            <div><span style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;">UoM</span><br><strong id="inv-uom-badge">KG</strong></div>
+            <div><span style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;">Pack Sizes</span><br><span id="inv-pack-sizes" style="font-size:13px;">—</span></div>
+            <div><span style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;">Carton Std</span><br><span id="inv-carton-std" style="font-size:13px;">—</span></div>
+            <div><span style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;">Current Stock</span><br><strong id="inv-current-stock" style="font-size:16px;">—</strong></div>
           </div>
         </div>
 
-        <!-- Product Info Card (auto-fills on product select) -->
-        <div id="tProdInfo" class="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-200 text-sm hidden">
-          <div class="flex flex-wrap gap-3 items-center">
-            <div><span class="text-slate-500">UoM:</span> <span id="tProdUom" class="font-bold text-rose-700"></span></div>
-            <div><span class="text-slate-500">Pack Sizes:</span> <span id="tProdPacks" class="font-semibold text-slate-700"></span></div>
-            <div id="tCartonStdRow" class="hidden"><span class="text-slate-500">Carton Std:</span> <span id="tProdCarton" class="font-semibold text-blue-700"></span> KG/carton</div>
-            <div><span class="text-slate-500">Current Stock:</span> <span id="tProdBalance" class="font-bold"></span></div>
-          </div>
-        </div>
-
-        <!-- Pack Type + Size fields -->
-        <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
-          <div>
-            <label class="font-semibold">Pack / Entry Type</label>
-            <select id="tPackMode" class="mt-1 w-full px-3 py-2 rounded-xl border">
-              <option value="BAG">🛍️ KG Bags — Size × No. of Bags</option>
-              <option value="CARTON_MANUAL">📦 Cartons — Enter KG per Carton</option>
-              <option value="CARTON_STD">📦 Cartons — Use Product Standard</option>
-              <option value="KG">⚖️ Direct KG / Weight Entry</option>
-              <option value="NOS">🔢 Units / NOS (pieces)</option>
+        <!-- Pack Mode -->
+        <div id="inv-pack-section" style="display:none;">
+          <div style="margin-bottom:16px;">
+            <label>Pack Type</label>
+            <select id="inv-pack-mode" onchange="SSIInventory.onPackModeChange()">
+              ${PACK_MODES.map(m=>`<option value="${m.value}">${m.label}</option>`).join('')}
             </select>
           </div>
-          <div id="tPackSizeRow">
-            <label class="font-semibold" id="tPackSizeLabel">Bag Size (KG)</label>
-            <input id="tPackSize" type="number" step="0.001" min="0"
-              class="mt-1 w-full px-3 py-2 rounded-xl border"
-              placeholder="e.g. 30 for 30 KG bag" />
-          </div>
-        </div>
 
-        <!-- Count + Auto Total -->
-        <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
-          <div id="tCountRow">
-            <label class="font-semibold" id="tCountLabel">No. of Bags / Cartons</label>
-            <input id="tCount" type="number" step="1" min="0"
-              class="mt-1 w-full px-3 py-2 rounded-xl border"
-              placeholder="e.g. 50" />
+          <div id="inv-pack-fields" class="form-grid form-grid-3">
+            <!-- dynamically filled -->
           </div>
-          <div>
-            <label class="font-semibold text-rose-700">📊 Total Quantity (auto)</label>
-            <div id="tQtyDisplay" class="mt-1 w-full px-3 py-2.5 rounded-xl border-2 border-rose-200 bg-rose-50 font-bold text-rose-700 text-base">
-              0
-            </div>
-            <input type="hidden" id="tQty" value="0" />
+
+          <div id="inv-total-display" style="display:none;background:#f0fdf4;border:2px solid #16a34a;border-radius:10px;padding:14px 20px;margin-top:16px;text-align:center;">
+            <span style="font-size:13px;color:#16a34a;font-weight:600;">Total Quantity</span><br>
+            <span id="inv-total-qty" style="font-size:28px;font-weight:900;color:#16a34a;">0.000</span>
+            <span id="inv-total-uom" style="font-size:16px;color:#16a34a;font-weight:600;"> KG</span>
           </div>
         </div>
 
         <!-- Note -->
-        <div class="mt-3 text-sm">
-          <label class="font-semibold">Note / Reference</label>
-          <input id="tNote" class="mt-1 w-full px-3 py-2 rounded-xl border"
-            placeholder="e.g. Purchase Bill No., Dispatch Order, Opening balance" />
-        </div>
-
-        <div class="mt-4 flex justify-end gap-2">
-          <button id="txnModalSave"
-            class="px-5 py-2 rounded-xl bg-rose-600 text-white font-semibold hover:bg-rose-700 text-sm">
-            💾 Save Entry
-          </button>
+        <div style="margin-top:16px;">
+          <label>Bill No. / Note</label>
+          <input id="inv-note" placeholder="e.g. Bill No. 1234 / Truck No. UP15AB1234">
         </div>
       </div>
-    </div>`;
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="SSIApp.closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="SSIInventory.saveEntry()">💾 Save Entry</button>
+      </div>`;
 
-  const openModal = () => {
-    document.getElementById('txnModal').classList.remove('hidden');
-    document.getElementById('txnModal').classList.add('flex');
-    document.getElementById('tDate').value = new Date().toISOString().slice(0,10);
-    document.getElementById('tPackSize').value = '';
-    document.getElementById('tCount').value = '';
-    document.getElementById('tQty').value = '0';
-    document.getElementById('tQtyDisplay').textContent = '0';
-    document.getElementById('tProdInfo').classList.add('hidden');
-    // Trigger product info update
-    updateProductInfo();
-    updatePackModeUI();
-  };
+    SSIApp.showModal(html);
+    if (prefillProductId && prefillUnitId) setTimeout(() => onProductUnitChange(), 100);
+  }
 
-  const closeModal = () => {
-    document.getElementById('txnModal').classList.add('hidden');
-    document.getElementById('txnModal').classList.remove('flex');
-  };
+  function onProductUnitChange() {
+    const productId = document.getElementById('inv-product')?.value;
+    const unitId    = document.getElementById('inv-unit')?.value;
+    const infoCard  = document.getElementById('inv-info-card');
+    const packSec   = document.getElementById('inv-pack-section');
 
-  // ── Smart UX helpers ──────────────────────────────────────────
-
-  const updateProductInfo = () => {
-    const st = SSIApp.getState();
-    const prodId = document.getElementById('tProd').value;
-    const unitId = document.getElementById('tUnit').value;
-    const p = st.products.find(x=>x.id===prodId);
-    if (!p) { document.getElementById('tProdInfo').classList.add('hidden'); return; }
-
-    document.getElementById('tProdInfo').classList.remove('hidden');
-
-    // UoM
-    const uom = p.uom || 'KG';
-    document.getElementById('tProdUom').textContent = uom;
-
-    // Pack sizes
-    const packs = (p.pack_sizes||[]);
-    document.getElementById('tProdPacks').textContent = packs.length ? packs.join(' | ') : 'Not specified';
-
-    // Carton standard
-    if (p.carton_std_kg) {
-      document.getElementById('tCartonStdRow').classList.remove('hidden');
-      document.getElementById('tProdCarton').textContent = p.carton_std_kg;
-    } else {
-      document.getElementById('tCartonStdRow').classList.add('hidden');
+    if (!productId || !unitId) {
+      if (infoCard) infoCard.style.display = 'none';
+      if (packSec)  packSec.style.display  = 'none';
+      return;
     }
 
-    // Current stock
-    const bal = calcBalance(st, unitId, prodId);
-    const balEl = document.getElementById('tProdBalance');
-    balEl.textContent = `${bal.toFixed(3)} ${uom}`;
-    balEl.className = bal <= 0 ? 'font-bold text-rose-600' : 'font-bold text-emerald-600';
-
-    // Auto-set pack mode for NOS products
-    if (uom === 'NOS') {
-      document.getElementById('tPackMode').value = 'NOS';
-    }
-
-    updatePackModeUI();
-    recalcQty();
-  };
-
-  const updatePackModeUI = () => {
     const st = SSIApp.getState();
-    const mode = document.getElementById('tPackMode').value;
-    const prodId = document.getElementById('tProd')?.value;
-    const p = st.products.find(x=>x.id===prodId);
+    const prod = st.products.find(p => p.id === productId);
+    if (!prod) return;
 
-    const sizeRow = document.getElementById('tPackSizeRow');
-    const countRow = document.getElementById('tCountRow');
-    const sizeLabel = document.getElementById('tPackSizeLabel');
-    const countLabel = document.getElementById('tCountLabel');
-    const sizeInput = document.getElementById('tPackSize');
+    const currentStock = SSIApp.getStock(productId, unitId);
+    const isNOS = prod.uom === 'NOS';
 
-    if (mode === 'NOS') {
-      // Only count (units)
-      sizeRow.classList.add('hidden');
-      countRow.classList.remove('hidden');
-      countLabel.textContent = 'Quantity (Units / NOS)';
-    } else if (mode === 'KG') {
-      // Only direct KG
-      sizeRow.classList.remove('hidden');
-      countRow.classList.add('hidden');
-      sizeLabel.textContent = 'Quantity (KG)';
-      sizeInput.placeholder = 'Enter total KG directly';
-    } else if (mode === 'BAG') {
-      // Bag size + bag count
-      sizeRow.classList.remove('hidden');
-      countRow.classList.remove('hidden');
-      sizeLabel.textContent = '🛍️ Bag Size (KG per bag)';
-      countLabel.textContent = 'No. of Bags';
-      sizeInput.placeholder = 'e.g. 30 for 30 KG bag';
-      // Auto-fill from product pack sizes
-      if (p && p.pack_sizes && p.pack_sizes.length > 0 && !sizeInput.value) {
-        // Find largest pack size in KG
-        const kgMap = {'100g':0.1,'200g':0.2,'500g':0.5,'1kg':1,'30kg':30,'40kg':40,'50kg':50};
-        const sizes = p.pack_sizes.map(s=>kgMap[s]||0).filter(x=>x>0).sort((a,b)=>b-a);
-        if (sizes.length) sizeInput.value = sizes[0];
-      }
-    } else if (mode === 'CARTON_MANUAL') {
-      sizeRow.classList.remove('hidden');
-      countRow.classList.remove('hidden');
-      sizeLabel.textContent = '📦 KG per Carton';
-      countLabel.textContent = 'No. of Cartons';
-      sizeInput.placeholder = 'e.g. 20 for 20 KG per carton';
+    // Show info card
+    document.getElementById('inv-uom-badge').textContent    = prod.uom || 'KG';
+    document.getElementById('inv-pack-sizes').textContent   = (prod.pack_sizes||[]).join(', ') || '—';
+    document.getElementById('inv-carton-std').textContent   = prod.carton_std > 0 ? prod.carton_std + ' KG/ctn' : '—';
+    const stockEl = document.getElementById('inv-current-stock');
+    stockEl.textContent = SSIApp.qtyFmt(currentStock) + ' ' + (prod.uom || 'KG');
+    stockEl.style.color = currentStock <= 0 ? '#dc2626' : currentStock <= (prod.reorder_level||0) ? '#d97706' : '#16a34a';
+    infoCard.style.display = 'block';
+    packSec.style.display  = 'block';
+
+    // Set default pack mode for NOS
+    if (isNOS) {
+      document.getElementById('inv-pack-mode').value = 'NOS';
+    }
+    onPackModeChange();
+  }
+
+  function onPackModeChange() {
+    const mode = document.getElementById('inv-pack-mode')?.value;
+    const fieldsDiv = document.getElementById('inv-pack-fields');
+    const totalDiv  = document.getElementById('inv-total-display');
+    if (!fieldsDiv) return;
+
+    const productId = document.getElementById('inv-product')?.value;
+    const st = SSIApp.getState();
+    const prod = productId ? st.products.find(p=>p.id===productId) : null;
+
+    // Build pack size options
+    const packOpts = (prod?.pack_sizes||[]).map(s=>`<option value="${s}">${s}</option>`).join('');
+
+    let html = '';
+    if (mode === 'BAG') {
+      html = `
+        <div>
+          <label>Bag Size (KG)</label>
+          <select id="inv-bag-size" onchange="SSIInventory.calcTotal()">
+            <option value="">—Select—</option>
+            ${packOpts}
+            <option value="custom">Custom...</option>
+          </select>
+        </div>
+        <div id="inv-bag-custom-wrap" style="display:none;">
+          <label>Custom Bag Size (KG)</label>
+          <input type="number" id="inv-bag-custom" min="0.001" step="0.001" placeholder="e.g. 25" oninput="SSIInventory.calcTotal()">
+        </div>
+        <div>
+          <label>No. of Bags *</label>
+          <input type="number" id="inv-count" min="1" placeholder="e.g. 30" oninput="SSIInventory.calcTotal()">
+        </div>`;
     } else if (mode === 'CARTON_STD') {
-      sizeRow.classList.remove('hidden');
-      countRow.classList.remove('hidden');
-      sizeLabel.textContent = '📦 KG per Carton (Product Std)';
-      countLabel.textContent = 'No. of Cartons';
-      sizeInput.placeholder = 'Auto from product standard';
-      // Auto-fill carton std
-      if (p && p.carton_std_kg) {
-        sizeInput.value = p.carton_std_kg;
-        sizeInput.readOnly = true;
-        sizeInput.classList.add('opacity-60');
-      }
-      return; // don't clear readOnly for other modes
+      const stdKg = prod?.carton_std || 0;
+      html = `
+        <div>
+          <label>KG per Carton (from product)</label>
+          <input type="number" id="inv-carton-kg" value="${stdKg}" readonly style="background:#f1f5f9;">
+        </div>
+        <div>
+          <label>No. of Cartons *</label>
+          <input type="number" id="inv-count" min="1" placeholder="e.g. 50" oninput="SSIInventory.calcTotal()">
+        </div>`;
+    } else if (mode === 'CARTON_MAN') {
+      html = `
+        <div>
+          <label>KG per Carton *</label>
+          <input type="number" id="inv-carton-kg" min="0.001" step="0.001" placeholder="e.g. 20" oninput="SSIInventory.calcTotal()">
+        </div>
+        <div>
+          <label>No. of Cartons *</label>
+          <input type="number" id="inv-count" min="1" placeholder="e.g. 75" oninput="SSIInventory.calcTotal()">
+        </div>`;
+    } else if (mode === 'DIRECT_KG') {
+      html = `
+        <div style="grid-column:span 3;">
+          <label>Direct KG Quantity *</label>
+          <input type="number" id="inv-direct-qty" min="0.001" step="0.001" placeholder="e.g. 1500" oninput="SSIInventory.calcTotal()">
+        </div>`;
+    } else if (mode === 'NOS') {
+      html = `
+        <div style="grid-column:span 3;">
+          <label>Number of Units *</label>
+          <input type="number" id="inv-direct-qty" min="1" placeholder="e.g. 200" oninput="SSIInventory.calcTotal()">
+        </div>`;
     }
 
-    // Ensure size is editable for non-CARTON_STD modes
-    sizeInput.readOnly = false;
-    sizeInput.classList.remove('opacity-60');
+    fieldsDiv.innerHTML = html;
+    totalDiv.style.display = 'block';
 
-    recalcQty();
-  };
+    // handle custom bag size
+    const bagSizeEl = document.getElementById('inv-bag-size');
+    if (bagSizeEl) {
+      bagSizeEl.onchange = () => {
+        const wrap = document.getElementById('inv-bag-custom-wrap');
+        if (bagSizeEl.value === 'custom') { if(wrap) wrap.style.display='block'; }
+        else { if(wrap) wrap.style.display='none'; }
+        calcTotal();
+      };
+    }
+    calcTotal();
+  }
 
-  const recalcQty = () => {
-    const mode = document.getElementById('tPackMode').value;
-    const size = Number(document.getElementById('tPackSize').value || 0);
-    const count = Number(document.getElementById('tCount').value || 0);
-    const st = SSIApp.getState();
-    const prodId = document.getElementById('tProd')?.value;
-    const p = st.products.find(x=>x.id===prodId);
+  function calcTotal() {
+    const mode = document.getElementById('inv-pack-mode')?.value;
+    const totalEl = document.getElementById('inv-total-qty');
+    const uomEl   = document.getElementById('inv-total-uom');
+    if (!totalEl) return;
 
     let qty = 0;
-    let label = '';
-
-    if (mode === 'NOS') {
-      qty = count;
-      label = `${qty} Units`;
-    } else if (mode === 'KG') {
-      qty = size;
-      label = `${qty.toFixed(3)} KG`;
-    } else if (mode === 'BAG') {
-      qty = size * count;
-      label = count > 0 && size > 0 ? `${size} KG × ${count} bags = ${qty.toFixed(3)} KG` : `${qty.toFixed(3)} KG`;
-    } else if (mode === 'CARTON_MANUAL') {
-      qty = size * count;
-      label = count > 0 && size > 0 ? `${size} KG × ${count} cartons = ${qty.toFixed(3)} KG` : `${qty.toFixed(3)} KG`;
-    } else if (mode === 'CARTON_STD') {
-      const std = p?.carton_std_kg || size;
-      qty = std * count;
-      label = count > 0 ? `${std} KG × ${count} cartons = ${qty.toFixed(3)} KG` : `${qty.toFixed(3)} KG`;
+    if (mode === 'BAG') {
+      const bagSizeEl = document.getElementById('inv-bag-size');
+      let bagSize = 0;
+      if (bagSizeEl) {
+        if (bagSizeEl.value === 'custom') {
+          bagSize = parseFloat(document.getElementById('inv-bag-custom')?.value) || 0;
+        } else {
+          // parse numeric value from label like "30 KG"
+          bagSize = parseFloat(bagSizeEl.value) || 0;
+          if (!bagSize) {
+            // try extracting number
+            const m = (bagSizeEl.value||'').match(/[\d.]+/);
+            bagSize = m ? parseFloat(m[0]) : 0;
+            // handle grams
+            if ((bagSizeEl.value||'').toLowerCase().includes('g') && !bagSizeEl.value.toLowerCase().includes('kg')) {
+              bagSize = bagSize / 1000;
+            }
+          }
+        }
+      }
+      const count = parseFloat(document.getElementById('inv-count')?.value) || 0;
+      qty = bagSize * count;
+    } else if (mode === 'CARTON_STD' || mode === 'CARTON_MAN') {
+      const kgPerCtn = parseFloat(document.getElementById('inv-carton-kg')?.value) || 0;
+      const count    = parseFloat(document.getElementById('inv-count')?.value) || 0;
+      qty = kgPerCtn * count;
+    } else if (mode === 'DIRECT_KG' || mode === 'NOS') {
+      qty = parseFloat(document.getElementById('inv-direct-qty')?.value) || 0;
     }
 
-    document.getElementById('tQty').value = qty;
-    document.getElementById('tQtyDisplay').textContent = label || '0';
-  };
+    const productId = document.getElementById('inv-product')?.value;
+    const st = SSIApp.getState();
+    const prod = productId ? st.products.find(p=>p.id===productId) : null;
+    const uom = (mode === 'NOS' || prod?.uom === 'NOS') ? 'NOS' : 'KG';
 
-  const bindModalEvents = () => {
-    document.getElementById('txnModalClose').onclick = closeModal;
-    document.getElementById('txnModal').addEventListener('click', (e)=>{
-      if (e.target.id==='txnModal') closeModal();
-    });
+    totalEl.textContent = SSIApp.qtyFmt(qty);
+    if (uomEl) uomEl.textContent = ' ' + uom;
+  }
 
-    // Product / Unit change → refresh product info card
-    document.getElementById('tProd').addEventListener('change', updateProductInfo);
-    document.getElementById('tUnit').addEventListener('change', updateProductInfo);
+  function getPackDesc() {
+    const mode = document.getElementById('inv-pack-mode')?.value;
+    if (mode === 'BAG') {
+      const bagSizeEl = document.getElementById('inv-bag-size');
+      let bagSize = bagSizeEl?.value === 'custom'
+        ? (document.getElementById('inv-bag-custom')?.value + ' KG (custom)')
+        : bagSizeEl?.value || '?';
+      const count = document.getElementById('inv-count')?.value || '?';
+      return `Bags: ${bagSize} × ${count}`;
+    } else if (mode === 'CARTON_STD') {
+      return `Cartons (Std ${document.getElementById('inv-carton-kg')?.value} KG) × ${document.getElementById('inv-count')?.value}`;
+    } else if (mode === 'CARTON_MAN') {
+      return `Cartons (${document.getElementById('inv-carton-kg')?.value} KG) × ${document.getElementById('inv-count')?.value}`;
+    } else if (mode === 'DIRECT_KG') {
+      return 'Direct KG';
+    } else if (mode === 'NOS') {
+      return 'Units/NOS';
+    }
+    return '—';
+  }
 
-    // Pack mode change → update UI
-    document.getElementById('tPackMode').addEventListener('change', ()=>{
-      updatePackModeUI();
-      recalcQty();
-    });
+  function saveEntry() {
+    const date      = document.getElementById('inv-date')?.value;
+    const type      = document.getElementById('inv-type')?.value;
+    const unitId    = document.getElementById('inv-unit')?.value;
+    const productId = document.getElementById('inv-product')?.value;
+    const note      = document.getElementById('inv-note')?.value.trim();
+    const mode      = document.getElementById('inv-pack-mode')?.value;
 
-    // Size / Count inputs → recalc
-    document.getElementById('tPackSize').addEventListener('input', recalcQty);
-    document.getElementById('tCount').addEventListener('input', recalcQty);
+    if (!date || !type || !unitId || !productId) {
+      SSIApp.toast('Please fill all required fields', 'error'); return;
+    }
 
-    document.getElementById('txnModalSave').onclick = () => {
-      const st = SSIApp.getState();
-      if (st.products.length===0) return SSIApp.toast('Add products first','warn');
+    // Calculate qty
+    calcTotal();
+    const qtyText = document.getElementById('inv-total-qty')?.textContent || '0';
+    const qty = parseFloat(qtyText.replace(/,/g,'')) || 0;
+    if (qty <= 0) { SSIApp.toast('Quantity must be greater than 0', 'error'); return; }
 
-      const qty = Number(document.getElementById('tQty').value || 0);
-      if (!qty || qty <= 0) return SSIApp.toast('Quantity must be > 0 — check bag size and count','warn');
+    // Check OUT doesn't exceed stock
+    if (['OUT','TRANSFER_OUT'].includes(type)) {
+      const current = SSIApp.getStock(productId, unitId);
+      if (qty > current) {
+        SSIApp.toast(`Insufficient stock! Current: ${SSIApp.qtyFmt(current)} KG`, 'error'); return;
+      }
+    }
 
-      const mode = document.getElementById('tPackMode').value;
-      const size = Number(document.getElementById('tPackSize').value || 0);
-      const count = Number(document.getElementById('tCount').value || 0);
+    const user = SSIApp.currentUser();
+    const st   = SSIApp.getState();
+    const prod = st.products.find(p=>p.id===productId);
 
-      // Build pack description for ledger display
-      let pack_desc = '';
-      if (mode === 'BAG') pack_desc = `${size}KG×${count} bags`;
-      else if (mode === 'CARTON_MANUAL') pack_desc = `${size}KG×${count} cartons`;
-      else if (mode === 'CARTON_STD') {
-        const p2 = st.products.find(x=>x.id===document.getElementById('tProd').value);
-        pack_desc = `${p2?.carton_std_kg||size}KG×${count} cartons(std)`;
-      } else if (mode === 'NOS') pack_desc = 'units';
-
-      const payload = {
-        id: SSIApp.uid('txn'),
-        date: document.getElementById('tDate').value,
-        type: document.getElementById('tType').value,
-        unit_id: document.getElementById('tUnit').value,
-        product_id: document.getElementById('tProd').value,
-        qty,
-        pack_mode: mode,
-        pack_desc,
-        note: document.getElementById('tNote').value.trim(),
-        created_at: SSIApp.nowISO()
-      };
-
-      if (!payload.date || !payload.unit_id || !payload.product_id) return SSIApp.toast('Missing fields','warn');
-
-      st.inventory_txn.unshift(payload);
-      SSIApp.setState(st);
-      SSIApp.audit('CREATE','inventory_txn',payload.id,{ type:payload.type, qty:payload.qty, pack_desc:payload.pack_desc });
-      SSIApp.toast('✅ Saved — ' + payload.pack_desc,'ok');
-      closeModal();
-      render();
+    const entry = {
+      id: SSIApp.uid(),
+      date,
+      type,
+      unit_id: unitId,
+      product_id: productId,
+      pack_mode: mode,
+      pack_desc: getPackDesc(),
+      qty,
+      note,
+      user_id: user?.id,
+      user_name: user?.name,
+      created_at: new Date().toISOString()
     };
-  };
 
-  return { render, calcBalance };
+    st.inventory.push(entry);
+    SSIApp.saveState(st);
+    SSIApp.toast(`Entry saved: ${SSIApp.qtyFmt(qty)} ${prod?.uom||'KG'} ✅`);
+    SSIApp.audit('INV_ENTRY', `${type} ${qty} ${prod?.name}`);
+    SSIApp.closeModal();
+    refresh(document.getElementById('page-area'));
+  }
+
+  async function deleteEntry(id) {
+    const ok = await SSIApp.confirm('Delete this inventory entry? Stock balance will change.');
+    if (!ok) return;
+    const st = SSIApp.getState();
+    st.inventory = st.inventory.filter(t => t.id !== id);
+    SSIApp.saveState(st);
+    SSIApp.toast('Entry deleted');
+    SSIApp.audit('INV_DELETE', id);
+    refresh(document.getElementById('page-area'));
+  }
+
+  function exportExcel() {
+    const st = SSIApp.getState();
+    const rows = [['Date','Type','Unit','Product','SKU','Pack Mode','Pack Desc','Qty','UoM','Note','By']];
+    [...st.inventory].sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(t => {
+      const prod = st.products.find(p=>p.id===t.product_id);
+      const unit = st.units.find(u=>u.id===t.unit_id);
+      const user = st.users.find(u=>u.id===t.user_id);
+      rows.push([
+        t.date, t.type, unit?.name||'', prod?.name||'', prod?.sku||'',
+        t.pack_mode||'', t.pack_desc||'', t.qty||0, prod?.uom||'KG',
+        t.note||'', user?.name||t.user_name||''
+      ]);
+    });
+    SSIApp.excelDownload(rows, 'Inventory', 'SSI_Inventory_Ledger');
+    SSIApp.toast('Inventory exported ✅');
+  }
+
+  return { render, refresh, openEntryModal, onProductUnitChange, onPackModeChange, calcTotal, saveEntry, deleteEntry, exportExcel, applyFilter };
 })();

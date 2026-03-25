@@ -1,355 +1,212 @@
-/* global SSIApp */
-
+/* SSI Products Module */
 const SSIProducts = (() => {
   const PACK_SIZES = [
-    { label:'100g', kg:0.1 },
-    { label:'200g', kg:0.2 },
-    { label:'500g', kg:0.5 },
-    { label:'1kg', kg:1 },
-    { label:'30kg', kg:30 },
-    { label:'40kg', kg:40 },
-    { label:'50kg', kg:50 }
+    {label:'100g',kg:0.1},{label:'200g',kg:0.2},{label:'500g',kg:0.5},
+    {label:'1 KG',kg:1},{label:'5 KG',kg:5},{label:'10 KG',kg:10},
+    {label:'25 KG',kg:25},{label:'30 KG',kg:30},{label:'40 KG',kg:40},
+    {label:'50 KG',kg:50},{label:'Units/NOS',kg:0}
   ];
 
-  const render = () => {
-    if (!SSIApp.requireRole(['ADMIN'])) return SSIApp.toast('Not allowed', 'err');
+  function render(area) {
+    if (!SSIApp.hasRole('ADMIN','STOCK')) { area.innerHTML='<div class="empty-state"><div class="icon">🔒</div><p>Access Denied</p></div>'; return; }
+    refresh(area);
+  }
+
+  function refresh(area) {
     const st = SSIApp.getState();
+    const products = st.products.filter(p=>p.active);
 
-    // Calculate stock per unit for each product
-    const calcStock = (unitId, prodId) => {
-      return (st.inventory_txn || []).reduce((sum, t) => {
-        if (t.unit_id !== unitId || t.product_id !== prodId) return sum;
-        if (t.type === 'IN' || t.type === 'OPEN') return sum + Number(t.qty || 0);
-        if (t.type === 'OUT') return sum - Number(t.qty || 0);
-        return sum;
-      }, 0);
-    };
-
-    const rows = st.products.map(p => {
-      // Stock chips per unit
-      const stockCells = (st.units || []).map(u => {
-        const bal = calcStock(u.id, p.id);
-        const low = p.reorder_level && bal <= p.reorder_level;
-        const chip = low
-          ? `<span class="chip chip-urgent" title="${u.name}">${u.code||u.name.split(' ')[1]}: ${bal.toFixed(1)} ⚠️</span>`
-          : `<span class="chip chip-ok" title="${u.name}">${u.code||u.name.split(' ')[1]}: ${bal.toFixed(1)}</span>`;
-        return chip;
-      }).join(' ');
-
-      return `
-      <tr class="border-t">
-        <td class="py-2 pr-3 font-semibold">${p.name}</td>
-        <td class="py-2 pr-3 text-slate-500">${p.sku || ''}</td>
-        <td class="py-2 pr-3">${p.uom || 'KG'}</td>
-        <td class="py-2 pr-3 text-slate-600">${(p.pack_sizes||[]).join(', ') || '-'}</td>
-        <td class="py-2 pr-3">${stockCells}</td>
-        <td class="py-2 text-right">
-          <button data-edit="${p.id}" class="px-3 py-1.5 rounded-lg border hover:bg-slate-50">Edit</button>
-          <button data-del="${p.id}" class="ml-2 px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50">Delete</button>
-        </td>
-      </tr>`;
-    }).join('');
-
-    const content = `
-      <div class="bg-white border border-slate-200 rounded-2xl p-5">
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="text-lg font-extrabold">Products</div>
-            <div class="text-sm text-slate-500">Products are shared across both units. Stock tracked per unit via Inventory IN/OUT. 🟢=OK stock, 🔴=Low/zero stock.</div>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <button id="btnTplProd" class="px-3 py-2 rounded-xl border hover:bg-slate-50 text-sm">📥 Template Excel</button>
-            <button id="btnImpProd" class="px-3 py-2 rounded-xl border hover:bg-slate-50 text-sm">📂 Import Excel</button>
-            <button id="btnExpProd" class="px-3 py-2 rounded-xl border hover:bg-slate-50 text-sm">📤 Export Excel</button>
-            <button id="btnAddProduct" class="px-4 py-2 rounded-xl bg-rose-600 text-white font-semibold hover:bg-rose-700">Add Product</button>
-          </div>
-        </div>
-
-        <div class="mt-4 overflow-auto">
-          <table class="w-full text-sm">
-            <thead class="text-left text-slate-500">
-              <tr>
-                <th class="py-2 pr-3">Name</th>
-                <th class="py-2 pr-3">SKU</th>
-                <th class="py-2 pr-3">UoM</th>
-                <th class="py-2 pr-3">Pack sizes</th>
-                <th class="py-2 pr-3">Stock (per Unit) <span class="text-xs font-normal text-slate-400">— green=OK, red=Low</span></th>
-                <th class="py-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>${rows || ''}</tbody>
-          </table>
-          ${st.products.length===0 ? `<div class="text-sm text-slate-500 py-4">No products yet. Click <b>Add Product</b>.</div>`:''}
-        </div>
+    area.innerHTML = `
+      <div class="page-header">
+        <h2 class="page-title">📦 Products</h2>
+        ${SSIApp.hasRole('ADMIN') ? `
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="SSIProducts.downloadTemplate()">⬇️ Template</button>
+          <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
+            📥 Import Excel <input type="file" accept=".xlsx,.xls" style="display:none;" onchange="SSIProducts.importExcel(this)">
+          </label>
+          <button class="btn btn-secondary btn-sm" onclick="SSIProducts.exportExcel()">📤 Export</button>
+          <button class="btn btn-primary" onclick="SSIProducts.openForm()">+ Add Product</button>
+        </div>` : ''}
       </div>
-      ${modalHtml()}
-      <input id="prodCsvFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden" />
-    `;
 
-    SSIApp.render(SSIApp.shell(content, 'products'));
-    SSIApp.bindShellEvents();
-
-    document.getElementById('btnAddProduct').addEventListener('click', ()=>openModal());
-
-    document.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => {
-      const id = b.getAttribute('data-edit');
-      openModal(st.products.find(x=>x.id===id));
-    }));
-
-    document.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
-      const id = b.getAttribute('data-del');
-      if (!confirm('Delete this product?')) return;
-      const st2 = SSIApp.getState();
-      st2.products = st2.products.filter(x=>x.id!==id);
-      SSIApp.setState(st2);
-      SSIApp.audit('DELETE','product',id,{});
-      SSIApp.toast('Product deleted','ok');
-      render();
-    }));
-
-    bindModalEvents();
-
-
-    // Bulk tools
-    document.getElementById('btnTplProd').addEventListener('click', () => {
-      const wb = XLSX.utils.book_new();
-      const wsData = [
-        ['product_name','uom_type','pack_sizes','carton_std_kg'],
-        ['Sample Product','WEIGHT','200g|500g|1kg|30kg',30],
-        ['Sample Unit Item','NOS','',''],
-      ];
-      const ws = XLSX.utils.aoa_to_sheet(wsData);
-      ws['!cols'] = [{wch:25},{wch:10},{wch:30},{wch:15}];
-      XLSX.utils.book_append_sheet(wb, ws, 'Products');
-      XLSX.writeFile(wb, 'products_template.xlsx');
-    });
-
-    document.getElementById('btnExpProd').addEventListener('click', () => {
-      const st3 = SSIApp.getState();
-      const wsData = [['Product Name','SKU','UoM Type','Pack Sizes','Carton Std (KG)','Reorder Level','Price INR','Price USD','Price EUR','Price GBP']];
-      for (const p of st3.products){
-        const uom_type = (p.uom==='NOS') ? 'NOS' : 'WEIGHT';
-        wsData.push([
-          p.name,
-          p.sku || '',
-          uom_type,
-          (p.pack_sizes||[]).join('|'),
-          p.carton_std_kg ?? '',
-          p.reorder_level ?? '',
-          p.prices?.INR ?? '',
-          p.prices?.USD ?? '',
-          p.prices?.EUR ?? '',
-          p.prices?.GBP ?? '',
-        ]);
-      }
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet(wsData);
-      ws['!cols'] = [{wch:25},{wch:12},{wch:10},{wch:30},{wch:14},{wch:13},{wch:11},{wch:11},{wch:11},{wch:11}];
-      XLSX.utils.book_append_sheet(wb, ws, 'Products');
-      XLSX.writeFile(wb, 'products_export.xlsx');
-    });
-
-    document.getElementById('btnImpProd').addEventListener('click', () => {
-      document.getElementById('prodCsvFile').click();
-    });
-
-    document.getElementById('prodCsvFile').addEventListener('change', async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      try {
-        const arrayBuffer = await file.arrayBuffer();
-        const wb = XLSX.read(arrayBuffer, { type: 'array' });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const objs = XLSX.utils.sheet_to_json(ws, { defval: '' });
-        const st4 = SSIApp.getState();
-        let added = 0;
-
-        for (const o of objs){
-          const name = String(o['product_name'] || o['Product Name'] || o['name'] || '').trim();
-          if (!name) continue;
-          const uom_raw = String(o['uom_type'] || o['UoM Type'] || o['uom'] || 'WEIGHT').toUpperCase();
-          const uom = (uom_raw==='NOS' || uom_raw==='UNIT' || uom_raw==='UNITS') ? 'NOS' : 'KG';
-          const pack_raw = String(o['pack_sizes'] || o['Pack Sizes'] || '');
-          const pack_sizes = pack_raw.split('|').map(x=>x.trim()).filter(Boolean);
-          const carton_raw = String(o['carton_std_kg'] || o['Carton Std (KG)'] || '').trim();
-
-          const prod = {
-            id: SSIApp.uid('prod'),
-            name,
-            sku: SSIApp.genSKU(),
-            uom,
-            pack_sizes,
-            carton_std_kg: carton_raw==='' || carton_raw==='0' ? null : Number(carton_raw),
-            reorder_level: null,
-            prices: { INR:null, USD:null, EUR:null, GBP:null },
-            created_at: SSIApp.nowISO(),
-          };
-          st4.products.unshift(prod);
-          added++;
-        }
-
-        SSIApp.setState(st4);
-        SSIApp.toast('Imported ' + added + ' products ✅', 'ok');
-        render();
-      } catch (err) {
-        console.error(err);
-        SSIApp.toast('Import failed. Check Excel format.', 'err');
-      } finally {
-        e.target.value = '';
-      }
-    });
-
-  };
-
-  const modalHtml = () => {
-    const packOptions = PACK_SIZES.map(p=>`<label class="flex items-center gap-2 text-sm">
-      <input type="checkbox" class="packChk" value="${p.label}" />
-      <span>${p.label}</span>
-    </label>`).join('');
-
-    return `
-    <div id="prodModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center p-4 z-40">
-      <div class="w-full max-w-2xl bg-white rounded-2xl border border-slate-200 shadow-lg p-5">
-        <div class="flex items-center justify-between">
-          <div class="text-lg font-extrabold" id="prodModalTitle">Add Product</div>
-          <button id="prodModalClose" class="px-3 py-1.5 rounded-lg border hover:bg-slate-50">Close</button>
+      <div class="card">
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr>
+              <th>SKU</th><th>Product Name</th><th>UoM</th><th>Pack Sizes</th><th>Carton Std</th><th>Reorder</th>
+              ${st.units.filter(u=>u.active).map(u=>`<th style="text-align:center;">${u.name}<br><span style="font-size:10px;">Stock</span></th>`).join('')}
+              <th>Status</th>${SSIApp.hasRole('ADMIN')?'<th>Actions</th>':''}
+            </tr></thead>
+            <tbody>
+              ${products.map(p=>{
+                const unitStocks = st.units.filter(u=>u.active).map(u=>{
+                  const qty = SSIApp.getStock(p.id,u.id);
+                  const isLow = p.reorder_level>0 && qty<=p.reorder_level;
+                  return `<td style="text-align:center;"><strong style="color:${qty<=0?'#dc2626':isLow?'#d97706':'#16a34a'};">${SSIApp.qtyFmt(qty)}</strong>${isLow?'<br><span style="font-size:10px;color:#dc2626;">LOW</span>':''}</td>`;
+                }).join('');
+                const packLabels = (p.pack_sizes||[]).join(', ');
+                const isLowTotal = p.reorder_level>0 && st.units.filter(u=>u.active).reduce((s,u)=>s+SSIApp.getStock(p.id,u.id),0)<=p.reorder_level;
+                return `<tr>
+                  <td><code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12px;">${p.sku}</code></td>
+                  <td><strong>${p.name}</strong>${p.description?`<br><span style="font-size:12px;color:#94a3b8;">${p.description}</span>`:''}</td>
+                  <td><span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:12px;font-size:12px;font-weight:600;">${p.uom||'KG'}</span></td>
+                  <td style="font-size:12px;color:#64748b;">${packLabels||'—'}</td>
+                  <td style="font-size:13px;">${p.carton_std>0?p.carton_std+' KG/ctn':'—'}</td>
+                  <td style="font-size:13px;">${p.reorder_level||'—'}</td>
+                  ${unitStocks}
+                  <td><span class="badge ${isLowTotal?'badge-low':'badge-ok'}">${isLowTotal?'⚠️ LOW':'✅ OK'}</span></td>
+                  ${SSIApp.hasRole('ADMIN')?`<td>
+                    <button class="btn btn-secondary btn-sm" onclick="SSIProducts.openForm('${p.id}')">✏️</button>
+                    <button class="btn btn-danger btn-sm" onclick="SSIProducts.deleteProduct('${p.id}')">🗑️</button>
+                  </td>`:''}
+                </tr>`;
+              }).join('') || `<tr><td colspan="20" class="empty-state"><div class="icon">📦</div><p>No products yet. Add your first product!</p></td></tr>`}
+            </tbody>
+          </table>
         </div>
+      </div>`;
+  }
 
-        <input type="hidden" id="pId" />
+  function openForm(id) {
+    const st = SSIApp.getState();
+    const p = id ? st.products.find(x=>x.id===id) : null;
+    const packSizeCheckboxes = PACK_SIZES.map(ps=>`
+      <label style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;">
+        <input type="checkbox" value="${ps.label}" ${(p?.pack_sizes||[]).includes(ps.label)?'checked':''} style="width:auto;"> ${ps.label}
+      </label>`).join('');
 
-        <div class="grid grid-cols-2 gap-3 mt-4">
-          <div class="col-span-2">
-            <label class="text-sm font-semibold">Product Name</label>
-            <input id="pName" class="mt-1 w-full px-3 py-2 rounded-xl border" placeholder="Product name" />
+    const html = `
+      <div class="modal-header">
+        <h3 style="font-size:18px;font-weight:700;">${p?'Edit':'Add'} Product</h3>
+        <button onclick="SSIApp.closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b;">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid form-grid-2">
+          <div>
+            <label>Product Name *</label>
+            <input id="p-name" value="${p?.name||''}" placeholder="e.g. Calcium Carbonate 1 KG">
           </div>
           <div>
-            <label class="text-sm font-semibold">SKU/Code</label>
-            <input id="pSku" class="mt-1 w-full px-3 py-2 rounded-xl border" placeholder="SKU" />
-          </div>
-          <div>
-            <label class="text-sm font-semibold">UoM</label>
-            <select id="pUom" class="mt-1 w-full px-3 py-2 rounded-xl border">
-              <option value="KG">KG (default)</option>
-              <option value="NOS">NOS (Units)</option>
+            <label>Unit of Measure *</label>
+            <select id="p-uom">
+              <option value="KG" ${p?.uom==='KG'?'selected':''}>KG (Weight-based)</option>
+              <option value="NOS" ${p?.uom==='NOS'?'selected':''}>NOS/Units (Count-based)</option>
             </select>
           </div>
-          <div class="col-span-2">
-            <label class="text-sm font-semibold">Pack Sizes (for weight products)</label>
-            <div class="mt-2 grid grid-cols-3 gap-2" id="packArea">${packOptions}</div>
+          <div>
+            <label>Description</label>
+            <input id="p-desc" value="${p?.description||''}" placeholder="Optional description">
           </div>
           <div>
-            <label class="text-sm font-semibold">Carton Standard (KG per carton) — Option B</label>
-            <input id="pCartonStd" type="number" step="0.001" class="mt-1 w-full px-3 py-2 rounded-xl border" placeholder="e.g. 30" />
+            <label>Reorder Level (${p?.uom||'KG'})</label>
+            <input id="p-reorder" type="number" min="0" value="${p?.reorder_level||''}" placeholder="e.g. 100">
           </div>
           <div>
-            <label class="text-sm font-semibold">Reorder Level</label>
-            <input id="pReorder" type="number" class="mt-1 w-full px-3 py-2 rounded-xl border" placeholder="e.g. 100" />
-          </div>
-          <div></div>
-
-          <div class="col-span-2">
-            <div class="text-sm font-extrabold">Price List (per KG or per Unit)</div>
-            <div class="text-xs text-slate-500">Default currency is INR.</div>
+            <label>Carton Standard (KG per carton)</label>
+            <input id="p-carton" type="number" min="0" step="0.001" value="${p?.carton_std||''}" placeholder="e.g. 20 (0 = not applicable)">
           </div>
           <div>
-            <label class="text-sm font-semibold">INR</label>
-            <input id="pINR" type="number" class="mt-1 w-full px-3 py-2 rounded-xl border" placeholder="0" />
-          </div>
-          <div>
-            <label class="text-sm font-semibold">USD</label>
-            <input id="pUSD" type="number" class="mt-1 w-full px-3 py-2 rounded-xl border" placeholder="0" />
-          </div>
-          <div>
-            <label class="text-sm font-semibold">EUR</label>
-            <input id="pEUR" type="number" class="mt-1 w-full px-3 py-2 rounded-xl border" placeholder="0" />
-          </div>
-          <div>
-            <label class="text-sm font-semibold">GBP</label>
-            <input id="pGBP" type="number" class="mt-1 w-full px-3 py-2 rounded-xl border" placeholder="0" />
+            <label>Default Rate (₹ per KG/Unit)</label>
+            <input id="p-rate" type="number" min="0" step="0.01" value="${p?.default_rate||''}" placeholder="e.g. 45.50">
           </div>
         </div>
-
-        <div class="mt-4 flex justify-end gap-2">
-          <button id="prodModalSave" class="px-4 py-2 rounded-xl bg-rose-600 text-white font-semibold hover:bg-rose-700">Save</button>
+        <div style="margin-top:16px;">
+          <label>Available Pack Sizes</label>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;" id="pack-sizes-container">
+            ${packSizeCheckboxes}
+          </div>
         </div>
       </div>
-    </div>`;
-  };
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="SSIApp.closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="SSIProducts.saveProduct('${id||''}')">💾 Save Product</button>
+      </div>`;
 
-  const openModal = (p=null) => {
-    document.getElementById('prodModal').classList.remove('hidden');
-    document.getElementById('prodModal').classList.add('flex');
+    SSIApp.showModal(html);
+  }
 
-    document.getElementById('pId').value = p?.id || '';
-    document.getElementById('pName').value = p?.name || '';
-    document.getElementById('pSku').value = p?.sku || '';
-    document.getElementById('pUom').value = p?.uom || 'KG';
-    document.getElementById('pCartonStd').value = p?.carton_std_kg ?? '';
-    document.getElementById('pReorder').value = p?.reorder_level ?? '';
+  function saveProduct(id) {
+    const name = document.getElementById('p-name').value.trim();
+    if (!name) { SSIApp.toast('Product name is required', 'error'); return; }
+    const uom = document.getElementById('p-uom').value;
+    const desc = document.getElementById('p-desc').value.trim();
+    const reorder = parseFloat(document.getElementById('p-reorder').value)||0;
+    const carton_std = parseFloat(document.getElementById('p-carton').value)||0;
+    const default_rate = parseFloat(document.getElementById('p-rate').value)||0;
+    const pack_sizes = [...document.querySelectorAll('#pack-sizes-container input:checked')].map(c=>c.value);
 
-    const prices = p?.prices || {};
-    document.getElementById('pINR').value = prices.INR ?? '';
-    document.getElementById('pUSD').value = prices.USD ?? '';
-    document.getElementById('pEUR').value = prices.EUR ?? '';
-    document.getElementById('pGBP').value = prices.GBP ?? '';
+    const st = SSIApp.getState();
+    if (id) {
+      const idx = st.products.findIndex(p=>p.id===id);
+      if (idx>=0) Object.assign(st.products[idx],{name,uom,description:desc,reorder_level:reorder,carton_std,default_rate,pack_sizes,updated_at:new Date().toISOString()});
+      SSIApp.toast('Product updated ✅');
+    } else {
+      const sku = SSIApp.nextSKU(st);
+      st.products.push({id:SSIApp.uid(),sku,name,uom,description:desc,reorder_level:reorder,carton_std,default_rate,pack_sizes,active:true,created_at:new Date().toISOString()});
+      SSIApp.toast('Product added ✅');
+    }
+    SSIApp.saveState(st);
+    SSIApp.closeModal();
+    SSIApp.audit('PRODUCT_SAVE',`Product ${name}`);
+    refresh(document.getElementById('page-area'));
+  }
 
-    const selected = new Set(p?.pack_sizes || []);
-    document.querySelectorAll('.packChk').forEach(chk => {
-      chk.checked = selected.has(chk.value);
-    });
+  async function deleteProduct(id) {
+    const ok = await SSIApp.confirm('Delete this product? This cannot be undone.');
+    if (!ok) return;
+    const st = SSIApp.getState();
+    const p = st.products.find(x=>x.id===id);
+    if (p) { p.active=false; SSIApp.saveState(st); SSIApp.toast('Product deleted'); SSIApp.audit('PRODUCT_DELETE',p.name); refresh(document.getElementById('page-area')); }
+  }
 
-    document.getElementById('prodModalTitle').textContent = p ? 'Edit Product' : 'Add Product';
-  };
+  function downloadTemplate() {
+    SSIApp.excelDownload([
+      ['Product Name','UoM (KG/NOS)','Description','Reorder Level','Carton Std (KG)','Default Rate','Pack Sizes (comma-separated)'],
+      ['Calcium Carbonate 1KG','KG','White powder','100','30','45.50','1 KG,30 KG,50 KG'],
+      ['Sample Product','KG','Description here','50','0','25','500g,1 KG'],
+    ],'Products','SSI_Products_Template');
+  }
 
-  const closeModal = () => {
-    document.getElementById('prodModal').classList.add('hidden');
-    document.getElementById('prodModal').classList.remove('flex');
-  };
-
-  const bindModalEvents = () => {
-    document.getElementById('prodModalClose').onclick = closeModal;
-    document.getElementById('prodModal').addEventListener('click', (e)=>{
-      if (e.target.id==='prodModal') closeModal();
-    });
-
-    document.getElementById('prodModalSave').onclick = () => {
+  async function importExcel(input) {
+    const file = input.files[0]; if (!file) return;
+    try {
+      const rows = await SSIApp.excelRead(file);
       const st = SSIApp.getState();
-      const id = document.getElementById('pId').value.trim();
-      const payload = {
-        id: id || SSIApp.uid('prod'),
-        name: document.getElementById('pName').value.trim(),
-        sku: (document.getElementById('pSku').value.trim() || SSIApp.genSKU()),
-        uom: document.getElementById('pUom').value,
-        pack_sizes: Array.from(document.querySelectorAll('.packChk')).filter(c=>c.checked).map(c=>c.value),
-        carton_std_kg: document.getElementById('pCartonStd').value === '' ? null : Number(document.getElementById('pCartonStd').value),
-        reorder_level: document.getElementById('pReorder').value === '' ? null : Number(document.getElementById('pReorder').value),
-        prices: {
-          INR: document.getElementById('pINR').value === '' ? null : Number(document.getElementById('pINR').value),
-          USD: document.getElementById('pUSD').value === '' ? null : Number(document.getElementById('pUSD').value),
-          EUR: document.getElementById('pEUR').value === '' ? null : Number(document.getElementById('pEUR').value),
-          GBP: document.getElementById('pGBP').value === '' ? null : Number(document.getElementById('pGBP').value)
-        },
-        created_at: SSIApp.nowISO()
-      };
+      let added=0;
+      rows.forEach(r=>{
+        const name = (r['Product Name']||'').toString().trim();
+        if (!name) return;
+        const sku = SSIApp.nextSKU(st);
+        st.products.push({
+          id:SSIApp.uid(),sku,name,
+          uom:(r['UoM (KG/NOS)']||'KG').toString().trim(),
+          description:(r['Description']||'').toString(),
+          reorder_level:parseFloat(r['Reorder Level'])||0,
+          carton_std:parseFloat(r['Carton Std (KG)'])||0,
+          default_rate:parseFloat(r['Default Rate'])||0,
+          pack_sizes:(r['Pack Sizes (comma-separated)']||'').toString().split(',').map(s=>s.trim()).filter(Boolean),
+          active:true,created_at:new Date().toISOString()
+        });
+        added++;
+      });
+      SSIApp.saveState(st);
+      SSIApp.toast(`${added} products imported ✅`);
+      SSIApp.audit('PRODUCT_IMPORT',`${added} products`);
+      refresh(document.getElementById('page-area'));
+    } catch(e) { SSIApp.toast('Import failed: '+e.message,'error'); }
+    input.value='';
+  }
 
-      if (!payload.name) return SSIApp.toast('Product name required','warn');
+  function exportExcel() {
+    const st = SSIApp.getState();
+    const rows = [['SKU','Product Name','UoM','Description','Reorder Level','Carton Std (KG)','Default Rate','Pack Sizes']];
+    st.products.filter(p=>p.active).forEach(p=>{
+      rows.push([p.sku,p.name,p.uom||'KG',p.description||'',p.reorder_level||0,p.carton_std||0,p.default_rate||0,(p.pack_sizes||[]).join(',')]);
+    });
+    SSIApp.excelDownload(rows,'Products','SSI_Products_Export');
+    SSIApp.toast('Products exported ✅');
+  }
 
-      const idx = st.products.findIndex(x=>x.id===payload.id);
-      if (idx>=0) st.products[idx] = { ...st.products[idx], ...payload };
-      else st.products.unshift(payload);
-
-      SSIApp.setState(st);
-      SSIApp.audit(idx>=0?'UPDATE':'CREATE','product',payload.id,{ name: payload.name });
-      SSIApp.toast('Saved','ok');
-      closeModal();
-      render();
-    };
-  };
-
-  const packToKg = (label) => {
-    const p = PACK_SIZES.find(x=>x.label===label);
-    return p ? p.kg : 1;
-  };
-
-  return { render, PACK_SIZES, packToKg };
+  return { render, openForm, saveProduct, deleteProduct, downloadTemplate, importExcel, exportExcel };
 })();

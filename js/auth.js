@@ -30,7 +30,7 @@ const SSIAuth = (() => {
 
           <!-- Logo Block -->
           <div class="flex flex-col items-center mb-6">
-            <img src="assets/ssi-logo-red-white.png" alt="SSI Logo"
+            <img src="ssi-logo-red-white.png" alt="SSI Logo"
               class="w-28 h-28 object-contain rounded-2xl"
               onerror="this.style.display='none'; document.getElementById('logoFallback').style.display='flex'" />
             <div id="logoFallback" style="display:none"

@@ -33,6 +33,10 @@ const SSIInventory = (() => {
       <div class="page-header">
         <h2 class="page-title">🏭 Inventory Ledger</h2>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="SSIInventory.downloadTemplate()">⬇️ Template</button>
+          <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
+            📥 Import Excel <input type="file" accept=".xlsx,.xls" style="display:none;" onchange="SSIInventory.importExcel(this)">
+          </label>
           <button class="btn btn-secondary btn-sm" onclick="SSIInventory.exportExcel()">📤 Export</button>
           <button class="btn btn-primary" onclick="SSIInventory.openEntryModal()">+ Add Entry</button>
         </div>
@@ -484,5 +488,102 @@ const SSIInventory = (() => {
     SSIApp.toast('Inventory exported ✅');
   }
 
-  return { render, refresh, openEntryModal, onProductUnitChange, onPackModeChange, calcTotal, saveEntry, deleteEntry, exportExcel, applyFilter };
+  // ── Import Excel (bulk inventory entries) ───────────────────
+  function downloadTemplate() {
+    const st = SSIApp.getState();
+    const unitNames = st.units.filter(u=>u.active).map(u=>u.name).join(' / ');
+    const productNames = st.products.filter(p=>p.active).slice(0,3).map(p=>p.name).join(' / ');
+    SSIApp.excelDownload([
+      ['Date (YYYY-MM-DD)','Entry Type','Unit Name','Product Name','Pack Mode','Bag/Carton Size (KG)','Count (Bags/Cartons)','Direct Qty (KG or NOS)','Note / Bill No'],
+      ['2026-03-26','IN',unitNames.split('/')[0].trim(), productNames.split('/')[0]?.trim()||'Product Name','BAG','50','30','','Bill No. 1234'],
+      ['2026-03-26','IN',unitNames.split('/')[0].trim(), productNames.split('/')[0]?.trim()||'Product Name','DIRECT_KG','','','1500','Opening stock'],
+      ['2026-03-26','OPENING',unitNames.split('/')[1]?.trim()||unitNames.split('/')[0].trim(), productNames.split('/')[1]?.trim()||'Product Name','BAG','30','20','','Opening balance'],
+    ], 'Inventory', 'SSI_Inventory_Template');
+    SSIApp.toast('Template downloaded ✅  — Entry Types: IN / OUT / OPENING / ADJUST / TRANSFER_IN / TRANSFER_OUT | Pack Modes: BAG / CARTON_STD / CARTON_MAN / DIRECT_KG / NOS', 'info');
+  }
+
+  async function importExcel(input) {
+    const file = input.files[0]; if (!file) return;
+    try {
+      const rows = await SSIApp.excelRead(file);
+      const st   = SSIApp.getState();
+      const user = SSIApp.currentUser();
+      let added = 0, errors = [];
+
+      rows.forEach((r, idx) => {
+        const dateRaw   = (r['Date (YYYY-MM-DD)'] || '').toString().trim();
+        const typeRaw   = (r['Entry Type'] || '').toString().trim().toUpperCase();
+        const unitName  = (r['Unit Name'] || '').toString().trim();
+        const prodName  = (r['Product Name'] || '').toString().trim();
+        const packMode  = (r['Pack Mode'] || 'DIRECT_KG').toString().trim().toUpperCase();
+        const bagSize   = parseFloat(r['Bag/Carton Size (KG)']) || 0;
+        const count     = parseFloat(r['Count (Bags/Cartons)']) || 0;
+        const directQty = parseFloat(r['Direct Qty (KG or NOS)']) || 0;
+        const note      = (r['Note / Bill No'] || '').toString().trim();
+
+        if (!dateRaw || !typeRaw || !unitName || !prodName) {
+          errors.push(`Row ${idx+2}: Missing required fields`);
+          return;
+        }
+
+        const unit = st.units.find(u => u.name.toLowerCase() === unitName.toLowerCase() && u.active);
+        if (!unit) { errors.push(`Row ${idx+2}: Unit "${unitName}" not found`); return; }
+
+        const prod = st.products.find(p => p.name.toLowerCase() === prodName.toLowerCase() && p.active);
+        if (!prod) { errors.push(`Row ${idx+2}: Product "${prodName}" not found`); return; }
+
+        const validTypes = ['IN','OUT','OPENING','ADJUST','TRANSFER_IN','TRANSFER_OUT'];
+        if (!validTypes.includes(typeRaw)) { errors.push(`Row ${idx+2}: Invalid type "${typeRaw}"`); return; }
+
+        // Calculate qty
+        let qty = 0;
+        let pack_desc = '';
+        if (packMode === 'BAG') {
+          qty = bagSize * count;
+          pack_desc = `Bags: ${bagSize} KG × ${count}`;
+        } else if (packMode === 'CARTON_STD') {
+          const stdKg = prod.carton_std || bagSize;
+          qty = stdKg * count;
+          pack_desc = `Cartons (Std ${stdKg}KG) × ${count}`;
+        } else if (packMode === 'CARTON_MAN') {
+          qty = bagSize * count;
+          pack_desc = `Cartons (${bagSize}KG) × ${count}`;
+        } else {
+          qty = directQty;
+          pack_desc = packMode === 'NOS' ? 'Units/NOS' : 'Direct KG';
+        }
+
+        if (qty <= 0) { errors.push(`Row ${idx+2}: Quantity is 0 — check size/count/direct qty`); return; }
+
+        st.inventory.push({
+          id:         SSIApp.uid(),
+          date:       dateRaw,
+          type:       typeRaw,
+          unit_id:    unit.id,
+          product_id: prod.id,
+          pack_mode:  packMode,
+          pack_desc,
+          qty,
+          note,
+          user_id:    user?.id,
+          user_name:  user?.name,
+          created_at: new Date().toISOString()
+        });
+        added++;
+      });
+
+      SSIApp.saveState(st);
+      let msg = `✅ ${added} entries imported`;
+      if (errors.length) msg += ` | ⚠️ ${errors.length} errors`;
+      SSIApp.toast(msg, errors.length ? 'warn' : 'success');
+      if (errors.length) console.warn('Import errors:', errors);
+      SSIApp.audit('INV_IMPORT', `${added} entries`);
+      refresh(document.getElementById('page-area'));
+    } catch (e) {
+      SSIApp.toast('Import failed: ' + e.message, 'error');
+    }
+    input.value = '';
+  }
+
+  return { render, refresh, openEntryModal, onProductUnitChange, onPackModeChange, calcTotal, saveEntry, deleteEntry, exportExcel, downloadTemplate, importExcel, applyFilter };
 })();

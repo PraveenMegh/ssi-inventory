@@ -186,4 +186,5 @@ const SSIApp = {
 };
 
 // Boot the app when DOM is ready
-document.addEventListener('DOMContentLoaded', () => SSIApp.init());
+SSIApp.bootstrap = async function() { await SSIApp.init(); };
+document.addEventListener('DOMContentLoaded', () => SSIApp.bootstrap());

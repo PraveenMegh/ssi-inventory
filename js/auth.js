@@ -1,78 +1,115 @@
-/* SSI Auth Module */
+// ============================================================
+//  SSI Inventory — Auth Module
+//  auth.js — works with new index.html + app.js
+// ============================================================
+
 const SSIAuth = (() => {
 
-  function renderLogin() {
-    document.getElementById('app').innerHTML = `
-      <style>
-        * { box-sizing:border-box; margin:0; padding:0; }
-        body { font-family:'Inter',sans-serif; background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%); min-height:100vh; display:flex; align-items:center; justify-content:center; }
-        @keyframes fadeUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes slideIn { from{transform:translateX(100%);opacity:0} to{transform:translateX(0);opacity:1} }
-      </style>
-      <div style="width:100%;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;">
-        <div style="background:#fff;border-radius:20px;box-shadow:0 25px 60px rgba(0,0,0,.4);padding:40px;width:100%;max-width:420px;animation:fadeUp .5s ease;">
-          <!-- Logo -->
-          <div style="text-align:center;margin-bottom:32px;">
-            <div style="width:80px;height:80px;background:linear-gradient(135deg,#e11d2e,#c41525);border-radius:20px;display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:24px;color:#fff;letter-spacing:-1px;box-shadow:0 8px 20px rgba(225,29,46,.3);margin-bottom:16px;">SSI</div>
-            <h1 style="font-size:22px;font-weight:800;color:#111827;">Shree Sai Industries</h1>
-            <p style="color:#64748b;font-size:13px;margin-top:4px;">Inventory Management System</p>
-          </div>
+  const NAV_ITEMS = {
+    ADMIN: [
+      { page: 'dashboard',  icon: '📊', label: 'Dashboard'        },
+      { page: 'products',   icon: '📦', label: 'Products'          },
+      { page: 'clients',    icon: '👥', label: 'Clients / Vendors'  },
+      { page: 'inventory',  icon: '🏭', label: 'Inventory'         },
+      { page: 'orders',     icon: '🛒', label: 'Sales Orders'      },
+      { page: 'dispatch',   icon: '🚚', label: 'Dispatch'          },
+      { page: 'reports',    icon: '📈', label: 'Reports'           },
+      { page: 'users',      icon: '👤', label: 'Users'             },
+      { page: 'units',      icon: '🏢', label: 'Units / Locations' }
+    ],
+    STOCK: [
+      { page: 'dashboard',  icon: '📊', label: 'Dashboard' },
+      { page: 'inventory',  icon: '🏭', label: 'Inventory'  }
+    ],
+    DISPATCH: [
+      { page: 'dashboard',  icon: '📊', label: 'Dashboard' },
+      { page: 'dispatch',   icon: '🚚', label: 'Dispatch'  }
+    ],
+    SALES: [
+      { page: 'dashboard',  icon: '📊', label: 'Dashboard'        },
+      { page: 'orders',     icon: '🛒', label: 'Sales Orders'      },
+      { page: 'clients',    icon: '👥', label: 'Clients / Vendors'  }
+    ]
+  };
 
-          <!-- Form -->
-          <div style="margin-bottom:16px;">
-            <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">Username</label>
-            <input id="login-user" type="text" placeholder="Enter username" autocomplete="username"
-              style="width:100%;padding:12px 16px;border:2px solid #e2e8f0;border-radius:10px;font-size:15px;outline:none;transition:border .2s;"
-              onfocus="this.style.borderColor='#e11d2e'" onblur="this.style.borderColor='#e2e8f0'">
-          </div>
-          <div style="margin-bottom:24px;">
-            <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">Password</label>
-            <input id="login-pass" type="password" placeholder="Enter password" autocomplete="current-password"
-              style="width:100%;padding:12px 16px;border:2px solid #e2e8f0;border-radius:10px;font-size:15px;outline:none;transition:border .2s;"
-              onfocus="this.style.borderColor='#e11d2e'" onblur="this.style.borderColor='#e2e8f0'">
-          </div>
-          <button id="login-btn"
-            style="width:100%;padding:14px;background:linear-gradient(135deg,#e11d2e,#c41525);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 4px 15px rgba(225,29,46,.3);transition:transform .1s;"
-            onmousedown="this.style.transform='scale(.98)'" onmouseup="this.style.transform='scale(1)'">
-            Sign In →
-          </button>
-          <div id="login-err" style="display:none;margin-top:12px;padding:10px 14px;background:#fee2e2;color:#991b1b;border-radius:8px;font-size:13px;text-align:center;"></div>
+  function showLogin(errorMsg) {
+    const loginScreen = document.getElementById('login-screen');
+    const appShell    = document.getElementById('app-shell');
+    if (loginScreen) loginScreen.style.display = 'flex';
+    if (appShell)    appShell.style.display = 'none';
+    const uInput = document.getElementById('login-user');
+    const pInput = document.getElementById('login-pass');
+    if (uInput) uInput.value = '';
+    if (pInput) pInput.value = '';
+    const errEl = document.getElementById('login-error');
+    if (errEl) {
+      if (errorMsg) { errEl.textContent = errorMsg; errEl.style.display = 'block'; }
+      else errEl.style.display = 'none';
+    }
+  }
 
-          <!-- Default credentials hint -->
-          <div style="margin-top:24px;padding:14px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;">
-            <p style="font-size:12px;font-weight:600;color:#64748b;margin-bottom:8px;">Default Credentials:</p>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:12px;color:#94a3b8;">
-              <span>Admin: admin / admin123</span>
-              <span>Stock: stock1 / stock123</span>
-              <span>Dispatch: dispatch1 / dispatch123</span>
-              <span>Sales: sales1 / sales123</span>
-            </div>
-          </div>
-        </div>
-      </div>`;
+  function showApp(user) {
+    const loginScreen = document.getElementById('login-screen');
+    const appShell    = document.getElementById('app-shell');
+    if (loginScreen) loginScreen.style.display = 'none';
+    if (appShell)    appShell.style.display = 'flex';
 
-    const doLogin = () => {
-      const u = document.getElementById('login-user').value.trim();
-      const p = document.getElementById('login-pass').value;
-      const err = document.getElementById('login-err');
-      if (!u || !p) { err.textContent = 'Please enter username and password.'; err.style.display='block'; return; }
-      if (SSIApp.login(u, p)) {
-        err.style.display = 'none';
-        SSIApp.bootstrap();
-      } else {
-        err.textContent = 'Invalid username or password.';
-        err.style.display = 'block';
-      }
-    };
+    const navEl = document.getElementById('sidebar-nav');
+    if (navEl) {
+      const items = NAV_ITEMS[user.role] || NAV_ITEMS.SALES;
+      navEl.innerHTML = items.map(item => `
+        <button data-nav="${item.page}"
+          onclick="SSIApp.navigate('${item.page}')"
+          style="display:flex;align-items:center;gap:.6rem;width:100%;padding:.6rem .75rem;border:none;background:transparent;color:#e2e8f0;border-radius:.5rem;cursor:pointer;font-size:.875rem;text-align:left;"
+          onmouseover="this.style.background='rgba(255,255,255,0.1)'"
+          onmouseout="if(!this.classList.contains('active'))this.style.background='transparent'">
+          <span>${item.icon}</span><span>${item.label}</span>
+        </button>`).join('');
+    }
 
-    document.getElementById('login-btn').onclick = doLogin;
-    document.getElementById('login-pass').onkeydown = e => { if (e.key==='Enter') doLogin(); };
+    const userInfoEl = document.getElementById('user-info');
+    if (userInfoEl) userInfoEl.innerHTML = `
+      <div style="font-weight:600;color:#e2e8f0;">${user.name}</div>
+      <div style="color:#93c5fd;font-size:.7rem;">${user.role}</div>`;
+
+    const topName = document.getElementById('top-user-name');
+    const topRole = document.getElementById('top-user-role');
+    if (topName) topName.textContent = user.name;
+    if (topRole) topRole.textContent = user.role;
+
+    const defaultPage = { ADMIN:'dashboard', STOCK:'inventory', DISPATCH:'dispatch', SALES:'orders' };
+    SSIApp.navigate(defaultPage[user.role] || 'dashboard');
+  }
+
+  function init() {
+    const u = SSIApp.state.currentUser;
+    if (u && u.username) { showApp(u); } else { showLogin(); }
+    const passEl = document.getElementById('login-pass');
+    if (passEl) passEl.addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+  }
+
+  function login() {
+    const username = (document.getElementById('login-user')?.value || '').trim();
+    const password =  document.getElementById('login-pass')?.value || '';
+    const errEl    =  document.getElementById('login-error');
+    if (!username || !password) {
+      if (errEl) { errEl.textContent = 'Please enter username and password.'; errEl.style.display = 'block'; }
+      return;
+    }
+    const user = (SSIApp.state.users || []).find(u => u.username === username && u.password === password && u.active !== false);
+    if (!user) {
+      if (errEl) { errEl.textContent = '❌ Invalid username or password.'; errEl.style.display = 'block'; }
+      document.getElementById('login-pass').value = '';
+      return;
+    }
+    SSIApp.state.currentUser = user;
+    showApp(user);
   }
 
   function logout() {
-    SSIApp.logout();
-    renderLogin();
+    SSIApp.state.currentUser = null;
+    showLogin();
   }
 
-  return { renderLogin, logout };
+  return { init, login, logout, showApp, showLogin };
 })();

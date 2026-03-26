@@ -144,9 +144,13 @@ const SSIOrders = (() => {
 
     const productOpts = st.products.filter(p=>p.active)
       .map(p=>`<option value="${p.id}">${p.name} (${p.uom||'KG'})</option>`).join('');
-    const clientOpts  = st.clients.filter(c=>c.active && c.type!=='Vendor')
+
+    // Clients: Sales sees only their assigned clients; Admin sees all
+    const myClients = SSIClients.visibleClients(st, user).filter(c => c.active && c.type !== 'Vendor');
+    const clientOpts = myClients
       .map(c=>`<option value="${c.id}" ${ord?.client_id===c.id?'selected':''}>${c.name}${c.gst_no?' | '+c.gst_no:''}</option>`).join('');
-    const unitOpts    = st.units.filter(u=>u.active)
+
+    const unitOpts = st.units.filter(u=>u.active)
       .map(u=>`<option value="${u.id}" ${ord?.unit_id===u.id?'selected':''}>${u.name}</option>`).join('');
 
     const html = `
@@ -172,8 +176,15 @@ const SSIOrders = (() => {
             </select>
           </div>
           <div style="grid-column:span 2;">
-            <label>Client *</label>
-            <select id="ord-client"><option value="">—Select Client—</option>${clientOpts}</select>
+            <label>Client *
+              ${myClients.length === 0 && user?.role === 'SALES'
+                ? '<span style="color:#dc2626;font-weight:400;font-size:12px;"> — No clients assigned yet! Ask Admin to assign clients to you.</span>'
+                : `<span style="color:#94a3b8;font-weight:400;font-size:12px;"> (${myClients.length} available)</span>`}
+            </label>
+            <select id="ord-client">
+              <option value="">—Select Client—</option>
+              ${clientOpts}
+            </select>
           </div>
           <div>
             <label>🚨 Urgent Order</label>

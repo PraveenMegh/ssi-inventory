@@ -1,6 +1,6 @@
 // ============================================================
 //  SSI Inventory Management System — Core App
-//  app.js
+//  app.js  (Firebase + full compatibility layer)
 // ============================================================
 
 const SSIApp = {
@@ -23,7 +23,7 @@ const SSIApp = {
     lastSaved:   null
   },
 
-  // ── Save state → Firestore + localStorage ─────────────────
+  // ── Save → Firestore + localStorage ───────────────────────
   async saveState() {
     this.state.lastSaved = new Date().toISOString();
     if (window.SSIFirebase) {
@@ -33,16 +33,13 @@ const SSIApp = {
     }
   },
 
-  // ── Load state ← Firestore (fallback localStorage) ────────
+  // ── Load ← Firestore (fallback localStorage) ──────────────
   async loadState() {
     let saved = null;
     if (window.SSIFirebase) {
       saved = await SSIFirebase.loadFromFirestore();
     } else {
-      try {
-        const raw = localStorage.getItem('ssiData');
-        if (raw) saved = JSON.parse(raw);
-      } catch(e) {}
+      try { const r = localStorage.getItem('ssiData'); if (r) saved = JSON.parse(r); } catch(e) {}
     }
     if (saved) {
       const cu = this.state.currentUser;
@@ -74,35 +71,37 @@ const SSIApp = {
 
     await this.saveState();
 
-    if (window.SSIFirebase) {
-      SSIFirebase.syncListener();
-    }
+    if (window.SSIFirebase) SSIFirebase.syncListener();
 
     SSIAuth.init();
   },
 
-  // ── bootstrap = alias for init (called from HTML/old code) ─
-  bootstrap: async function() {
-    await SSIApp.init();
-  },
+  bootstrap: async function() { await SSIApp.init(); },
 
   // ── Role-based navigation ──────────────────────────────────
   navigate(page) {
     const u    = this.state.currentUser;
-    const area = document.getElementById('app-area');
+    const area = document.getElementById('app-area') || document.getElementById('page-area');
     if (!u || !area) return;
 
     document.body.setAttribute('data-page', page);
 
     document.querySelectorAll('[data-nav]').forEach(el => {
-      el.classList.toggle('active', el.getAttribute('data-nav') === page);
+      const isActive = el.getAttribute('data-nav') === page;
+      if (isActive) {
+        el.style.background = 'rgba(255,255,255,0.15)';
+        el.style.borderLeft = '3px solid #fff';
+      } else {
+        el.style.background = 'transparent';
+        el.style.borderLeft = '3px solid transparent';
+      }
     });
 
     const pageTitles = {
-      dashboard: '📊 Dashboard', products: '📦 Products',
-      clients: '👥 Clients / Vendors', inventory: '🏭 Inventory Ledger',
-      orders: '🛒 Sales Orders', dispatch: '🚚 Dispatch',
-      reports: '📈 Reports', users: '👤 User Management', units: '🏢 Units / Locations'
+      dashboard:'📊 Dashboard', products:'📦 Products',
+      clients:'👥 Clients / Vendors', inventory:'🏭 Inventory Ledger',
+      orders:'🛒 Sales Orders', dispatch:'🚚 Dispatch',
+      reports:'📈 Reports', users:'👤 User Management', units:'🏢 Units / Locations'
     };
     const titleEl = document.getElementById('page-title');
     if (titleEl) titleEl.textContent = pageTitles[page] || page;
@@ -115,14 +114,7 @@ const SSIApp = {
     };
 
     if (!(allowed[u.role] || []).includes(page)) {
-      area.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:center;height:60vh;">
-          <div style="text-align:center;">
-            <div style="font-size:4rem;">🚫</div>
-            <h2 style="color:#374151;font-size:1.5rem;margin:.5rem 0;">Access Denied</h2>
-            <p style="color:#6b7280;">You don't have permission to view this page.</p>
-          </div>
-        </div>`;
+      area.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:60vh;"><div style="text-align:center;"><div style="font-size:4rem;">🚫</div><h2 style="color:#374151;">Access Denied</h2><p style="color:#6b7280;">You don't have permission to view this page.</p></div></div>`;
       return;
     }
 
@@ -140,7 +132,56 @@ const SSIApp = {
     }
   },
 
-  // ── Helpers ────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════
+  //  COMPATIBILITY LAYER — functions used by old modules
+  // ════════════════════════════════════════════════════════
+
+  // Check if current user has one of the given roles
+  hasRole(...roles) {
+    const u = this.state.currentUser;
+    if (!u) return false;
+    return roles.includes(u.role);
+  },
+
+  // Return state (modules call SSIApp.getState())
+  getState() {
+    return this.state;
+  },
+
+  // Calculate current stock for a product+unit combination
+  getStock(productId, unitId) {
+    const entries = (this.state.inventory || []).filter(e => e.product_id === productId);
+    let qty = 0;
+    for (const e of entries) {
+      const type = e.type || e.entry_type || '';
+      if (!unitId || e.unit_id === unitId) {
+        if (['OPENING','IN','TRANSFER_IN'].includes(type))  qty += parseFloat(e.qty || e.quantity || 0);
+        if (['OUT','TRANSFER_OUT'].includes(type))           qty -= parseFloat(e.qty || e.quantity || 0);
+        if (type === 'ADJUST')                               qty += parseFloat(e.qty || e.quantity || 0);
+      }
+    }
+    return qty;
+  },
+
+  // Format money with currency symbol
+  moneyFmt(value, currency) {
+    const cur = currency || (this.state.currentUser && this.state.currentUser.currency) || 'INR';
+    const cfg = this.CURRENCIES[cur] || this.CURRENCIES.INR;
+    return cfg.symbol + parseFloat(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  },
+
+  // Format quantity (KG with 3 decimals)
+  qtyFmt(qty) {
+    return parseFloat(qty || 0).toFixed(3);
+  },
+
+  // Format date — alias used by old modules
+  dateFmt(d) {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  },
+
+  // ── Standard helpers ───────────────────────────────────────
   genId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
   },
@@ -149,10 +190,7 @@ const SSIApp = {
     return 'SSI-' + String(n).padStart(4, '0');
   },
 
-  fmtDate(d) {
-    if (!d) return '';
-    return new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
-  },
+  fmtDate(d) { return this.dateFmt(d); },
 
   fmtNum(n, decimals = 2) {
     return parseFloat(n || 0).toFixed(decimals);
@@ -174,6 +212,14 @@ const SSIApp = {
     document.body.appendChild(t);
     setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 400); }, 3000);
   }
+};
+
+// ── page-area alias — old modules call getElementById('page-area') ──
+// We intercept this so old code works with new HTML (id="app-area")
+const _origGetById = document.getElementById.bind(document);
+document.getElementById = function(id) {
+  if (id === 'page-area') return _origGetById('app-area') || _origGetById('page-area');
+  return _origGetById(id);
 };
 
 // Boot

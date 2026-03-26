@@ -1,11 +1,10 @@
 // ============================================================
-//  SSI Inventory Management System — Core App (v10 + Firebase)
-//  app.js  (place in js/ folder)
+//  SSI Inventory Management System — Core App
+//  app.js
 // ============================================================
 
 const SSIApp = {
 
-  // ── Currency config ───────────────────────────────────────
   CURRENCIES: {
     INR: { symbol: '₹',  name: 'Indian Rupee',   rate: 1      },
     USD: { symbol: '$',  name: 'US Dollar',       rate: 0.012  },
@@ -13,7 +12,6 @@ const SSIApp = {
     GBP: { symbol: '£',  name: 'British Pound',   rate: 0.0095 }
   },
 
-  // ── Application state ─────────────────────────────────────
   state: {
     users:       [],
     products:    [],
@@ -25,49 +23,45 @@ const SSIApp = {
     lastSaved:   null
   },
 
-  // ── Persist state → Firestore + localStorage ──────────────
+  // ── Save state → Firestore + localStorage ─────────────────
   async saveState() {
     this.state.lastSaved = new Date().toISOString();
-    // Save via Firebase module (also keeps localStorage copy)
     if (window.SSIFirebase) {
       await SSIFirebase.saveToFirestore(this.state);
     } else {
-      // Fallback if Firebase not loaded
-      try {
-        localStorage.setItem('ssiData', JSON.stringify(this.state));
-      } catch(e) {}
+      try { localStorage.setItem('ssiData', JSON.stringify(this.state)); } catch(e) {}
     }
   },
 
-  // ── Load state ← Firestore (falls back to localStorage) ───
+  // ── Load state ← Firestore (fallback localStorage) ────────
   async loadState() {
     let saved = null;
     if (window.SSIFirebase) {
       saved = await SSIFirebase.loadFromFirestore();
     } else {
-      const raw = localStorage.getItem('ssiData');
-      if (raw) { try { saved = JSON.parse(raw); } catch(e) {} }
+      try {
+        const raw = localStorage.getItem('ssiData');
+        if (raw) saved = JSON.parse(raw);
+      } catch(e) {}
     }
-
     if (saved) {
-      // Restore all fields except currentUser (session-only)
       const cu = this.state.currentUser;
       Object.assign(this.state, saved);
       this.state.currentUser = cu;
     }
   },
 
-  // ── Seed defaults on first run ────────────────────────────
+  // ── Seed defaults ──────────────────────────────────────────
   async init() {
     await this.loadState();
 
     if (!this.state.users || this.state.users.length === 0) {
       this.state.users = [
-        { id: this.genId(), username: 'admin',     password: 'admin123',    name: 'Administrator',   role: 'ADMIN',    active: true  },
-        { id: this.genId(), username: 'stock1',    password: 'stock123',    name: 'Stock Manager',   role: 'STOCK',    active: true  },
-        { id: this.genId(), username: 'dispatch1', password: 'dispatch123', name: 'Dispatch Officer',role: 'DISPATCH', active: true  },
-        { id: this.genId(), username: 'sales1',    password: 'sales123',    name: 'Sales Person 1',  role: 'SALES',    active: true  },
-        { id: this.genId(), username: 'sales2',    password: 'sales456',    name: 'Sales Person 2',  role: 'SALES',    active: true  }
+        { id: this.genId(), username: 'admin',     password: 'admin123',    name: 'Administrator',    role: 'ADMIN',    active: true },
+        { id: this.genId(), username: 'stock1',    password: 'stock123',    name: 'Stock Manager',    role: 'STOCK',    active: true },
+        { id: this.genId(), username: 'dispatch1', password: 'dispatch123', name: 'Dispatch Officer', role: 'DISPATCH', active: true },
+        { id: this.genId(), username: 'sales1',    password: 'sales123',    name: 'Sales Person 1',   role: 'SALES',    active: true },
+        { id: this.genId(), username: 'sales2',    password: 'sales456',    name: 'Sales Person 2',   role: 'SALES',    active: true }
       ];
     }
 
@@ -80,7 +74,6 @@ const SSIApp = {
 
     await this.saveState();
 
-    // Start real-time sync listener AFTER initial load
     if (window.SSIFirebase) {
       SSIFirebase.syncListener();
     }
@@ -88,7 +81,12 @@ const SSIApp = {
     SSIAuth.init();
   },
 
-  // ── Role-based navigation ─────────────────────────────────
+  // ── bootstrap = alias for init (called from HTML/old code) ─
+  bootstrap: async function() {
+    await SSIApp.init();
+  },
+
+  // ── Role-based navigation ──────────────────────────────────
   navigate(page) {
     const u    = this.state.currentUser;
     const area = document.getElementById('app-area');
@@ -96,14 +94,19 @@ const SSIApp = {
 
     document.body.setAttribute('data-page', page);
 
-    // Update nav active state
     document.querySelectorAll('[data-nav]').forEach(el => {
       el.classList.toggle('active', el.getAttribute('data-nav') === page);
     });
 
-    const role = u.role;
+    const pageTitles = {
+      dashboard: '📊 Dashboard', products: '📦 Products',
+      clients: '👥 Clients / Vendors', inventory: '🏭 Inventory Ledger',
+      orders: '🛒 Sales Orders', dispatch: '🚚 Dispatch',
+      reports: '📈 Reports', users: '👤 User Management', units: '🏢 Units / Locations'
+    };
+    const titleEl = document.getElementById('page-title');
+    if (titleEl) titleEl.textContent = pageTitles[page] || page;
 
-    // Role-gate
     const allowed = {
       ADMIN:    ['dashboard','products','clients','inventory','orders','dispatch','reports','users','units'],
       STOCK:    ['dashboard','inventory'],
@@ -111,34 +114,33 @@ const SSIApp = {
       SALES:    ['dashboard','orders','clients']
     };
 
-    if (!(allowed[role] || []).includes(page)) {
+    if (!(allowed[u.role] || []).includes(page)) {
       area.innerHTML = `
-        <div class="flex items-center justify-center h-64">
-          <div class="text-center">
-            <div class="text-6xl mb-4">🚫</div>
-            <h2 class="text-2xl font-bold text-gray-700">Access Denied</h2>
-            <p class="text-gray-500 mt-2">You don't have permission to view this page.</p>
+        <div style="display:flex;align-items:center;justify-content:center;height:60vh;">
+          <div style="text-align:center;">
+            <div style="font-size:4rem;">🚫</div>
+            <h2 style="color:#374151;font-size:1.5rem;margin:.5rem 0;">Access Denied</h2>
+            <p style="color:#6b7280;">You don't have permission to view this page.</p>
           </div>
         </div>`;
       return;
     }
 
-    // Route to module
     switch(page) {
-      case 'dashboard':  SSIDashboard.render(area);  break;
-      case 'products':   SSIProducts.render(area);   break;
-      case 'clients':    SSIClients.render(area);    break;
-      case 'inventory':  SSIInventory.render(area);  break;
-      case 'orders':     SSIOrders.render(area);     break;
-      case 'dispatch':   SSIDispatch.render(area);   break;
-      case 'reports':    SSIReports.render(area);    break;
-      case 'users':      SSIUsers.render(area);      break;
-      case 'units':      SSIUnits.render(area);      break;
-      default:           SSIDashboard.render(area);  break;
+      case 'dashboard':  if(window.SSIDashboard)  SSIDashboard.render(area);  break;
+      case 'products':   if(window.SSIProducts)   SSIProducts.render(area);   break;
+      case 'clients':    if(window.SSIClients)     SSIClients.render(area);    break;
+      case 'inventory':  if(window.SSIInventory)   SSIInventory.render(area);  break;
+      case 'orders':     if(window.SSIOrders)      SSIOrders.render(area);     break;
+      case 'dispatch':   if(window.SSIDispatch)    SSIDispatch.render(area);   break;
+      case 'reports':    if(window.SSIReports)     SSIReports.render(area);    break;
+      case 'users':      if(window.SSIUsers)       SSIUsers.render(area);      break;
+      case 'units':      if(window.SSIUnits)       SSIUnits.render(area);      break;
+      default:           if(window.SSIDashboard)   SSIDashboard.render(area);  break;
     }
   },
 
-  // ── Utility helpers ───────────────────────────────────────
+  // ── Helpers ────────────────────────────────────────────────
   genId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
   },
@@ -149,42 +151,30 @@ const SSIApp = {
 
   fmtDate(d) {
     if (!d) return '';
-    const dt = new Date(d);
-    return dt.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+    return new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
   },
 
   fmtNum(n, decimals = 2) {
     return parseFloat(n || 0).toFixed(decimals);
   },
 
-  // Export data as .xlsx using SheetJS
   excelDownload(rows, fileName) {
-    if (typeof XLSX === 'undefined') {
-      this.toastMsg('Excel library not loaded!', 'error');
-      return;
-    }
+    if (typeof XLSX === 'undefined') { this.toastMsg('Excel library not loaded!', 'error'); return; }
     const ws = XLSX.utils.aoa_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
     XLSX.writeFile(wb, fileName + '.xlsx');
   },
 
-  // Toast notification
   toastMsg(msg, type = 'success') {
-    const colors = {
-      success: 'bg-green-600',
-      error:   'bg-red-600',
-      warning: 'bg-yellow-500',
-      info:    'bg-blue-600'
-    };
-    const toast = document.createElement('div');
-    toast.className = `fixed bottom-6 right-6 z-50 px-5 py-3 rounded-lg text-white text-sm font-medium shadow-lg transition-all ${colors[type] || colors.info}`;
-    toast.textContent = msg;
-    document.body.appendChild(toast);
-    setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 400); }, 3000);
+    const colors = { success:'#16a34a', error:'#dc2626', warning:'#d97706', info:'#2563eb' };
+    const t = document.createElement('div');
+    t.style.cssText = `position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;background:${colors[type]||colors.info};color:#fff;padding:.6rem 1.2rem;border-radius:.6rem;font-size:.875rem;font-weight:500;box-shadow:0 4px 12px rgba(0,0,0,.2);transition:opacity .4s;`;
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 400); }, 3000);
   }
 };
 
-// Boot the app when DOM is ready
-SSIApp.bootstrap = async function() { await SSIApp.init(); };
+// Boot
 document.addEventListener('DOMContentLoaded', () => SSIApp.bootstrap());

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SSI Inventory Management</title>
+
+  <!-- Favicon & PWA -->
+  <link rel="icon" type="image/png" href="assets/ssi-favicon.png" />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <!-- SheetJS (Excel import/export) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- ✅ Firebase SDK (compat v10) — MUST come before firebase.js & app.js -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+  <style>
+    /* ── Base ── */
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; background: #f1f5f9; }
+
+    /* ── Sidebar nav active state ── */
+    [data-nav].active {
+      background: rgba(255,255,255,0.15);
+      border-left: 3px solid #fff;
+    }
+
+    /* ── Status badges ── */
+    .badge-draft      { background:#e2e8f0; color:#475569; }
+    .badge-submitted  { background:#fef3c7; color:#b45309; }
+    .badge-dispatched { background:#d1fae5; color:#065f46; }
+    .badge-cancelled  { background:#fee2e2; color:#991b1b; }
+    .badge-low        { background:#fee2e2; color:#991b1b; }
+    .badge-ok         { background:#d1fae5; color:#065f46; }
+
+    /* ── Modal overlay ── */
+    .modal-backdrop {
+      position:fixed; inset:0; background:rgba(0,0,0,.5);
+      display:flex; align-items:center; justify-content:center;
+      z-index:50; padding:1rem;
+    }
+    .modal-box {
+      background:#fff; border-radius:1rem;
+      width:100%; max-width:640px;
+      max-height:90vh; overflow-y:auto;
+      padding:1.5rem; box-shadow:0 25px 50px rgba(0,0,0,.25);
+    }
+
+    /* ── Table ── */
+    .ssi-table { width:100%; border-collapse:collapse; }
+    .ssi-table th {
+      background:#1e3a5f; color:#fff;
+      padding:.6rem 1rem; text-align:left; font-size:.8rem;
+      text-transform:uppercase; letter-spacing:.05em;
+    }
+    .ssi-table td {
+      padding:.6rem 1rem; border-bottom:1px solid #e2e8f0;
+      font-size:.875rem; vertical-align:middle;
+    }
+    .ssi-table tr:hover td { background:#f8fafc; }
+
+    /* ── Buttons ── */
+    .btn-primary   { @apply bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition; }
+    .btn-success   { @apply bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition; }
+    .btn-danger    { @apply bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition; }
+    .btn-secondary { @apply bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition; }
+
+    /* ── Sidebar ── */
+    #sidebar { transition: transform .3s ease; }
+    @media(max-width:768px) {
+      #sidebar { position:fixed; z-index:40; transform:translateX(-100%); }
+      #sidebar.open { transform:translateX(0); }
+    }
+
+    /* ── Login screen ── */
+    #login-screen {
+      min-height:100vh; display:flex;
+      align-items:center; justify-content:center;
+      background:linear-gradient(135deg,#1e3a5f 0%,#0f2440 100%);
+    }
+    #login-screen.hidden { display:none; }
+
+    /* ── App shell ── */
+    #app-shell { display:none; }
+    #app-shell.visible { display:flex; }
+
+    /* ── Sync indicator ── */
+    #sync-badge {
+      position:fixed; top:4px; right:8px;
+      font-size:.65rem; padding:2px 8px;
+      border-radius:999px; z-index:100;
+      background:#22c55e; color:#fff;
+      opacity:0; transition:opacity .4s;
+    }
+    #sync-badge.show { opacity:1; }
+  </style>
+</head>
+<body>
+
+<!-- ── Sync indicator ─────────────────────────────────── -->
+<div id="sync-badge">🔄 Synced</div>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!--  LOGIN SCREEN                                        -->
+<!-- ════════════════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="bg-white rounded-2xl shadow-2xl p-10 w-full max-w-sm text-center">
+
+    <!-- Logo -->
+    <img src="assets/ssi-logo.png" alt="SSI Logo"
+         class="w-24 h-24 object-contain mx-auto mb-4 rounded-xl shadow" />
+
+    <h1 class="text-2xl font-bold text-gray-800">Shree Sai Industries</h1>
+    <p class="text-sm text-gray-500 mb-6">Inventory Management System</p>
+
+    <!-- Login form -->
+    <div id="login-error"
+         class="hidden bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-2 mb-4"></div>
+
+    <input id="login-user" type="text" placeholder="Username"
+           class="w-full border border-gray-300 rounded-lg px-4 py-2.5 mb-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+
+    <input id="login-pass" type="password" placeholder="Password"
+           class="w-full border border-gray-300 rounded-lg px-4 py-2.5 mb-5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+
+    <button onclick="SSIAuth.login()"
+            class="w-full bg-blue-700 hover:bg-blue-800 text-white font-semibold py-2.5 rounded-lg transition text-sm">
+      Login
+    </button>
+
+    <p class="text-xs text-gray-400 mt-6">© 2025 Shree Sai Industries</p>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!--  APP SHELL (visible after login)                    -->
+<!-- ════════════════════════════════════════════════════ -->
+<div id="app-shell" class="flex h-screen overflow-hidden">
+
+  <!-- ── Sidebar ───────────────────────────────────────── -->
+  <aside id="sidebar"
+         class="w-64 bg-gradient-to-b from-blue-900 to-blue-800 text-white flex-shrink-0 flex flex-col h-full overflow-y-auto">
+
+    <!-- Logo area -->
+    <div class="p-5 flex items-center gap-3 border-b border-blue-700">
+      <img src="assets/ssi-logo.png" alt="SSI"
+           class="w-10 h-10 object-contain rounded-lg bg-white p-0.5" />
+      <div>
+        <div class="font-bold text-sm leading-tight">Shree Sai</div>
+        <div class="text-xs text-blue-300">Inventory System</div>
+      </div>
+    </div>
+
+    <!-- Nav links — filled by auth.js based on role -->
+    <nav id="sidebar-nav" class="flex-1 py-4 px-2 space-y-1 text-sm"></nav>
+
+    <!-- User info + logout -->
+    <div class="p-4 border-t border-blue-700">
+      <div id="user-info" class="text-xs text-blue-300 mb-3"></div>
+      <button onclick="SSIAuth.logout()"
+              class="w-full bg-red-600 hover:bg-red-700 text-white text-xs py-2 rounded-lg transition">
+        🚪 Logout
+      </button>
+    </div>
+  </aside>
+
+  <!-- ── Main content ───────────────────────────────────── -->
+  <div class="flex-1 flex flex-col overflow-hidden">
+
+    <!-- Top bar -->
+    <div id="top-bar"
+         class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm flex-shrink-0">
+
+      <!-- Mobile hamburger -->
+      <button class="md:hidden text-gray-600 mr-3" onclick="document.getElementById('sidebar').classList.toggle('open')">
+        ☰
+      </button>
+
+      <div id="page-title" class="font-semibold text-gray-700 text-sm"></div>
+
+      <div class="flex items-center gap-3 text-sm text-gray-500">
+        <span id="top-user-name" class="font-medium text-gray-700"></span>
+        <span id="top-user-role"
+              class="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full font-medium"></span>
+      </div>
+    </div>
+
+    <!-- Page content area -->
+    <main id="app-area" class="flex-1 overflow-y-auto p-4 md:p-6"></main>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!--  JS MODULES                                         -->
+<!--  Load firebase.js BEFORE app.js                    -->
+<!-- ════════════════════════════════════════════════════ -->
+<script src="js/firebase.js"></script>
+<script src="js/app.js"      type="module"></script>
+<script src="js/auth.js"     type="module"></script>
+<script src="js/dashboard.js"type="module"></script>
+<script src="js/products.js" type="module"></script>
+<script src="js/clients.js"  type="module"></script>
+<script src="js/inventory.js"type="module"></script>
+<script src="js/orders.js"   type="module"></script>
+<script src="js/dispatch.js" type="module"></script>
+<script src="js/reports.js"  type="module"></script>
+<script src="js/users.js"    type="module"></script>
+<script src="js/units.js"    type="module"></script>
+
+</body>
+</html>

@@ -172,7 +172,7 @@ const SSIOrders = (() => {
           <div>
             <label>Currency</label>
             <select id="ord-currency">
-              ${SSIApp.CURRENCIES.map(c=>`<option value="${c}" ${ord?.currency===c||(c==='INR'&&!ord)?'selected':''}>${c} (${SSIApp.CURRENCY_SYMBOLS[c]})</option>`).join('')}
+              ${Object.keys(SSIApp.CURRENCIES).map(c=>`<option value="${c}" ${ord?.currency===c||(c==='INR'&&!ord)?'selected':''}>${c} (${SSIApp.CURRENCY_SYMBOLS[c]})</option>`).join('')}
             </select>
           </div>
           <div style="grid-column:span 2;">

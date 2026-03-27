@@ -1,5 +1,5 @@
 // ============================================================
-//  SSI Inventory — Firebase Firestore Integration (v2)
+//  SSI Inventory — Firebase Firestore Integration (v3)
 //  firebase.js
 //  Firebase SDK compat scripts MUST be loaded in index.html
 //  BEFORE this file.
@@ -17,47 +17,44 @@
     appId:             "1:817558451124:web:acad56012d3975e9cd4685"
   };
 
-  // Init once
+  // ── Init Firebase once ──────────────────────────────────────
   if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 
-  // Enable offline persistence so the app works without internet
-  const db = firebase.firestore();
-  db.enablePersistence({ synchronizeTabs: true }).catch(err => {
-    if (err.code === 'failed-precondition') {
-      console.warn('[SSI Firebase] Persistence unavailable (multiple tabs)');
-    } else if (err.code === 'unimplemented') {
-      console.warn('[SSI Firebase] Persistence not supported in this browser');
-    }
-  });
+  const db      = firebase.firestore();
+  const DOC_REF = db.collection('ssi').doc('data');
 
-  const DOC_REF    = db.collection('ssi').doc('data');
   let _unsubscribe = null;
   let _isSaving    = false;
 
-  // ── Sync badge ──────────────────────────────────────────────
-  function showSyncBadge(ok = true) {
+  // ── Enable offline cache (new non-deprecated API) ───────────
+  // Uses experimentalForceLongPolling to help behind firewalls/proxies
+  try {
+    db.settings({ experimentalForceLongPolling: true, merge: true });
+  } catch(e) { /* already set */ }
+
+  // ── Sync badge helper ───────────────────────────────────────
+  function showSyncBadge(ok) {
     const b = document.getElementById('sync-badge');
     if (!b) return;
-    b.textContent  = ok ? '✅ Synced' : '🔴 Offline';
-    b.style.background = ok ? '#22c55e' : '#ef4444';
+    b.textContent       = ok ? '✅ Synced' : '🔴 Offline';
+    b.style.background  = ok ? '#22c55e'  : '#ef4444';
     b.classList.add('show');
     setTimeout(() => b.classList.remove('show'), 2500);
   }
 
-  // ── Load (Firestore first, localStorage fallback) ───────────
+  // ── Load (Firestore first → localStorage fallback) ──────────
   async function loadFromFirestore() {
-    // Try Firestore with a 6-second timeout
     try {
       const snap = await Promise.race([
-        DOC_REF.get(),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 6000))
+        DOC_REF.get({ source: 'server' }),          // force fresh fetch from server
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 10000))
       ]);
-      if (snap.exists) {
-        console.log('[SSI Firebase] Loaded from Firestore ✅');
+      if (snap && snap.exists) {
+        console.log('[SSI Firebase] ✅ Loaded from Firestore');
         showSyncBadge(true);
         return snap.data();
       }
-      console.warn('[SSI Firebase] No Firestore doc yet — will seed defaults');
+      console.warn('[SSI Firebase] No document yet — will seed defaults');
       return null;
     } catch (err) {
       console.error('[SSI Firebase] Firestore load failed:', err.message);
@@ -77,19 +74,21 @@
 
   // ── Save ────────────────────────────────────────────────────
   async function saveToFirestore(stateObj) {
-    // Always keep localStorage in sync (instant, works offline)
+    // Always keep localStorage in sync first (instant, offline-safe)
     try { localStorage.setItem('ssiData', JSON.stringify(stateObj)); } catch (e) {}
+
+    if (_isSaving) return;   // prevent concurrent saves
 
     try {
       _isSaving = true;
       await DOC_REF.set(stateObj);
       showSyncBadge(true);
-      console.log('[SSI Firebase] Saved to Firestore ✅');
+      console.log('[SSI Firebase] ✅ Saved to Firestore');
     } catch (err) {
-      console.warn('[SSI Firebase] Firestore save failed (offline?):', err.message);
+      console.warn('[SSI Firebase] Firestore save failed:', err.message);
       showSyncBadge(false);
     } finally {
-      setTimeout(() => { _isSaving = false; }, 1200);
+      setTimeout(() => { _isSaving = false; }, 1000);
     }
   }
 
@@ -98,8 +97,11 @@
     if (_unsubscribe) { _unsubscribe(); _unsubscribe = null; }
 
     _unsubscribe = DOC_REF.onSnapshot(
+      { includeMetadataChanges: false },
       snap => {
-        if (!snap.exists || _isSaving) return;
+        // Ignore if we are mid-save (our own write coming back)
+        if (!snap || !snap.exists || _isSaving) return;
+
         const incoming    = snap.data();
         const currentUser = SSIApp.state.currentUser;
 
@@ -112,13 +114,18 @@
         showSyncBadge(true);
         const page = document.body.getAttribute('data-page');
         if (page && page !== 'login') SSIApp.navigate(page);
-        console.log('[SSI Firebase] Real-time update 🔄');
+        console.log('[SSI Firebase] 🔄 Real-time update received');
       },
-      err => console.error('[SSI Firebase] Listener error:', err)
+      err => {
+        console.error('[SSI Firebase] Listener error:', err.message);
+        showSyncBadge(false);
+      }
     );
 
-    console.log('[SSI Firebase] Real-time listener started 👂');
+    console.log('[SSI Firebase] 👂 Real-time listener started');
   }
 
+  // ── Expose globally ─────────────────────────────────────────
   window.SSIFirebase = { db, loadFromFirestore, saveToFirestore, syncListener };
+
 })();

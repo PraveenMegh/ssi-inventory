@@ -1,5 +1,5 @@
 // ============================================================
-//  SSI Inventory — Firebase Firestore Integration (v3)
+//  SSI Inventory — Firebase Firestore Integration (v3 FINAL)
 //  firebase.js
 //  Firebase SDK compat scripts MUST be loaded in index.html
 //  BEFORE this file.
@@ -9,12 +9,12 @@
   'use strict';
 
   const firebaseConfig = {
-    apiKey:            "AIzaSyDzVVzHlVh5mjg2EruHyHbKQIp0bHqTCeM",
-    authDomain:        "ssiinventory.firebaseapp.com",
-    projectId:         "ssiinventory",
-    storageBucket:     "ssiinventory.firebasestorage.app",
-    messagingSenderId: "817558451124",
-    appId:             "1:817558451124:web:acad56012d3975e9cd4685"
+    apiKey:            "AIzaSyDVKuFoudpThq6jSN94WDnN99ayLuuxLAQ",
+    authDomain:        "ssi-inventory.firebaseapp.com",
+    projectId:         "ssi-inventory",
+    storageBucket:     "ssi-inventory.firebasestorage.app",
+    messagingSenderId: "90864108725",
+    appId:             "1:90864108725:web:625c8234c0a38fadecaafc"
   };
 
   // ── Init Firebase once ──────────────────────────────────────
@@ -26,8 +26,7 @@
   let _unsubscribe = null;
   let _isSaving    = false;
 
-  // ── Enable offline cache (new non-deprecated API) ───────────
-  // Uses experimentalForceLongPolling to help behind firewalls/proxies
+  // ── Force long polling (helps behind firewalls/proxies/Render) ──
   try {
     db.settings({ experimentalForceLongPolling: true, merge: true });
   } catch(e) { /* already set */ }
@@ -36,8 +35,8 @@
   function showSyncBadge(ok) {
     const b = document.getElementById('sync-badge');
     if (!b) return;
-    b.textContent       = ok ? '✅ Synced' : '🔴 Offline';
-    b.style.background  = ok ? '#22c55e'  : '#ef4444';
+    b.textContent      = ok ? '✅ Synced' : '🔴 Offline';
+    b.style.background = ok ? '#22c55e'  : '#ef4444';
     b.classList.add('show');
     setTimeout(() => b.classList.remove('show'), 2500);
   }
@@ -46,7 +45,7 @@
   async function loadFromFirestore() {
     try {
       const snap = await Promise.race([
-        DOC_REF.get({ source: 'server' }),          // force fresh fetch from server
+        DOC_REF.get({ source: 'server' }),
         new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 10000))
       ]);
       if (snap && snap.exists) {
@@ -77,7 +76,7 @@
     // Always keep localStorage in sync first (instant, offline-safe)
     try { localStorage.setItem('ssiData', JSON.stringify(stateObj)); } catch (e) {}
 
-    if (_isSaving) return;   // prevent concurrent saves
+    if (_isSaving) return;  // prevent concurrent saves
 
     try {
       _isSaving = true;
@@ -99,7 +98,6 @@
     _unsubscribe = DOC_REF.onSnapshot(
       { includeMetadataChanges: false },
       snap => {
-        // Ignore if we are mid-save (our own write coming back)
         if (!snap || !snap.exists || _isSaving) return;
 
         const incoming    = snap.data();
@@ -108,7 +106,6 @@
         Object.assign(SSIApp.state, incoming);
         SSIApp.state.currentUser = currentUser;
 
-        // Keep localStorage cache fresh
         try { localStorage.setItem('ssiData', JSON.stringify(SSIApp.state)); } catch (e) {}
 
         showSyncBadge(true);

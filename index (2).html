@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SSI Inventory — Shree Sai Industries</title>
+  <link rel="icon" type="image/png" href="assets/ssi-favicon.png" />
+
+  <!-- Tailwind (layout helpers) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- SheetJS -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- ✅ Firebase SDK — MUST load before firebase.js -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+  <style>
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f1f5f9; color: #111827; }
+
+    /* ── Layout ── */
+    #login-screen  { min-height:100vh; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#1e3a5f,#0f2440); }
+    #login-screen.hidden { display:none !important; }
+    #app-shell     { display:none; height:100vh; overflow:hidden; }
+    #app-shell.visible { display:flex; }
+    #sidebar       { width:240px; background:linear-gradient(180deg,#1e3a5f,#0f2440); color:#fff; display:flex; flex-direction:column; height:100vh; overflow-y:auto; flex-shrink:0; }
+    #main-content  { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+    #app-area      { flex:1; overflow-y:auto; padding:1.5rem; }
+
+    /* ── Card ── */
+    .card {
+      background: #fff;
+      border-radius: .75rem;
+      padding: 1.25rem 1.5rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.07);
+      margin-bottom: 1.25rem;
+    }
+
+    /* ── Stat card ── */
+    .stat-card {
+      background: #fff;
+      border-radius: .75rem;
+      padding: 1.25rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    }
+
+    /* ── Info card ── */
+    .info-card {
+      background: #f8fafc;
+      border-radius: .5rem;
+      padding: .75rem 1rem;
+      border: 1px solid #e2e8f0;
+      font-size: .9rem;
+    }
+
+    /* ── Page header ── */
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.25rem;
+      flex-wrap: wrap;
+      gap: .75rem;
+    }
+    .page-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #1e3a5f;
+    }
+
+    /* ── Table ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .875rem;
+    }
+    table thead tr { background: #1e3a5f; }
+    table th {
+      padding: .6rem 1rem;
+      text-align: left;
+      color: #fff;
+      font-size: .75rem;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      font-weight: 600;
+    }
+    table td {
+      padding: .6rem 1rem;
+      border-bottom: 1px solid #f1f5f9;
+      vertical-align: middle;
+      color: #374151;
+    }
+    table tbody tr:hover td { background: #f8fafc; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      padding: .5rem 1rem;
+      border: none;
+      border-radius: .5rem;
+      font-size: .875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+      text-decoration: none;
+    }
+    .btn:hover   { opacity: .88; }
+    .btn:active  { transform: scale(.97); }
+    .btn-primary   { background: #1d4ed8; color: #fff; }
+    .btn-secondary { background: #e2e8f0; color: #374151; }
+    .btn-success   { background: #16a34a; color: #fff; }
+    .btn-danger    { background: #dc2626; color: #fff; }
+    .btn-warning   { background: #d97706; color: #fff; }
+    .btn-sm        { padding: .3rem .75rem; font-size: .8rem; }
+
+    /* ── Forms ── */
+    label {
+      display: block;
+      font-size: .8rem;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: .35rem;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: .55rem .85rem;
+      border: 1.5px solid #d1d5db;
+      border-radius: .5rem;
+      font-size: .875rem;
+      color: #111827;
+      background: #fff;
+      transition: border-color .15s;
+      outline: none;
+    }
+    input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
+    .form-grid   { display: grid; gap: 1rem; }
+    .form-grid-2 { grid-template-columns: 1fr 1fr; }
+    @media (max-width: 600px) { .form-grid-2 { grid-template-columns: 1fr; } }
+
+    /* ── Modal ── */
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.1rem 1.5rem;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .modal-body   { padding: 1.25rem 1.5rem; }
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: .75rem;
+      padding: 1rem 1.5rem;
+      border-top: 1px solid #f1f5f9;
+      background: #f8fafc;
+      border-radius: 0 0 1rem 1rem;
+    }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-block;
+      padding: .2rem .65rem;
+      border-radius: 999px;
+      font-size: .72rem;
+      font-weight: 700;
+      letter-spacing: .03em;
+    }
+    .badge-ok         { background: #dcfce7; color: #166534; }
+    .badge-low        { background: #fee2e2; color: #991b1b; }
+    .badge-draft      { background: #f1f5f9; color: #475569; }
+    .badge-submitted  { background: #fef3c7; color: #b45309; }
+    .badge-dispatched { background: #dcfce7; color: #166534; }
+    .badge-cancelled  { background: #fee2e2; color: #991b1b; }
+
+    /* ── Empty state ── */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 4rem 2rem;
+      text-align: center;
+      color: #94a3b8;
+    }
+    .empty-state .icon { font-size: 3.5rem; margin-bottom: 1rem; }
+    .empty-state p     { font-size: 1rem; font-weight: 500; }
+
+    /* ── Sync badge ── */
+    #sync-badge {
+      position: fixed; top: 8px; right: 12px;
+      background: #22c55e; color: #fff;
+      font-size: .7rem; padding: 3px 10px;
+      border-radius: 999px; z-index: 999;
+      opacity: 0; transition: opacity .4s;
+      pointer-events: none;
+    }
+    #sync-badge.show { opacity: 1; }
+
+    /* ── Sidebar nav active ── */
+    [data-nav].active {
+      background: rgba(255,255,255,.15) !important;
+      border-left: 3px solid #fff !important;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      #sidebar { position:fixed; z-index:40; transform:translateX(-100%); transition:transform .3s; }
+      #sidebar.open { transform:translateX(0); }
+      #app-area { padding: 1rem; }
+      .form-grid-2 { grid-template-columns: 1fr; }
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+  </style>
+</head>
+<body>
+
+<!-- Sync indicator -->
+<div id="sync-badge">✅ Synced</div>
+
+<!-- ═══════════════════════ LOGIN ═══════════════════════ -->
+<div id="login-screen">
+  <div style="background:#fff;border-radius:1.25rem;padding:2.5rem;width:100%;max-width:380px;box-shadow:0 25px 60px rgba(0,0,0,.4);text-align:center;">
+
+    <img src="assets/ssi-logo.png" alt="SSI Logo"
+         style="width:90px;height:90px;object-fit:contain;border-radius:.75rem;margin:0 auto 1rem;display:block;background:#f1f5f9;padding:4px;"
+         onerror="this.style.display='none'" />
+
+    <h1 style="font-size:1.5rem;font-weight:800;color:#1e3a5f;">Shree Sai Industries</h1>
+    <p style="color:#64748b;font-size:.875rem;margin:.25rem 0 1.5rem;">Inventory Management System</p>
+
+    <div id="login-error" style="display:none;background:#fef2f2;border:1px solid #fca5a5;color:#dc2626;border-radius:.5rem;padding:.6rem 1rem;font-size:.85rem;margin-bottom:1rem;text-align:left;"></div>
+
+    <input id="login-user" type="text" placeholder="Username" autocomplete="username"
+           style="margin-bottom:.75rem;"
+           onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()" />
+
+    <input id="login-pass" type="password" placeholder="Password" autocomplete="current-password"
+           style="margin-bottom:1.25rem;"
+           onkeydown="if(event.key==='Enter')SSIAuth.login()" />
+
+    <button onclick="SSIAuth.login()"
+            style="width:100%;background:#1d4ed8;color:#fff;border:none;border-radius:.6rem;padding:.85rem;font-size:1rem;font-weight:700;cursor:pointer;">
+      Login →
+    </button>
+
+    <p style="color:#94a3b8;font-size:.75rem;margin-top:1.5rem;">© 2025 Shree Sai Industries</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════ APP SHELL ═══════════════════════ -->
+<div id="app-shell">
+
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div style="padding:1.1rem;display:flex;align-items:center;gap:.75rem;border-bottom:1px solid rgba(255,255,255,.1);">
+      <img src="assets/ssi-logo.png" alt="SSI"
+           style="width:38px;height:38px;object-fit:contain;border-radius:.5rem;background:#fff;padding:2px;flex-shrink:0;"
+           onerror="this.style.display='none'" />
+      <div>
+        <div style="font-weight:700;font-size:.9rem;line-height:1.2;">Shree Sai</div>
+        <div style="font-size:.7rem;color:#93c5fd;">Inventory System</div>
+      </div>
+    </div>
+
+    <nav id="sidebar-nav" style="flex:1;padding:.6rem .5rem;"></nav>
+
+    <div style="padding:1rem;border-top:1px solid rgba(255,255,255,.1);">
+      <div id="user-info" style="font-size:.75rem;color:#93c5fd;margin-bottom:.6rem;"></div>
+      <button onclick="SSIAuth.logout()"
+              style="width:100%;background:#dc2626;color:#fff;border:none;border-radius:.5rem;padding:.5rem;font-size:.8rem;font-weight:600;cursor:pointer;">
+        🚪 Logout
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div id="main-content">
+    <!-- Top bar -->
+    <div style="background:#fff;border-bottom:1px solid #e2e8f0;padding:.7rem 1.5rem;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.05);">
+      <div style="display:flex;align-items:center;gap:.75rem;">
+        <button onclick="document.getElementById('sidebar').classList.toggle('open')"
+                style="display:none;background:none;border:none;font-size:1.3rem;cursor:pointer;color:#64748b;"
+                class="md:block" id="hamburger">☰</button>
+        <span id="page-title" style="font-weight:700;color:#1e3a5f;font-size:.95rem;"></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:.6rem;">
+        <span id="top-user-name" style="font-size:.85rem;font-weight:600;color:#374151;"></span>
+        <span id="top-user-role" style="background:#dbeafe;color:#1d4ed8;font-size:.7rem;padding:.2rem .65rem;border-radius:999px;font-weight:700;"></span>
+      </div>
+    </div>
+
+    <!-- Page content -->
+    <main id="app-area"></main>
+  </div>
+</div>
+
+<!-- ═══════════════════════ SCRIPTS ═══════════════════════
+     ORDER MATTERS: Firebase SDK → firebase.js → app.js → rest
+════════════════════════════════════════════════════════ -->
+<script src="js/firebase.js"></script>
+<script src="js/app.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/products.js"></script>
+<script src="js/clients.js"></script>
+<script src="js/inventory.js"></script>
+<script src="js/orders.js"></script>
+<script src="js/dispatch.js"></script>
+<script src="js/reports.js"></script>
+<script src="js/users.js"></script>
+<script src="js/units.js"></script>
+
+</body>
+</html>

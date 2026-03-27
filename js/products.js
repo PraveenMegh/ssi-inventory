@@ -34,7 +34,7 @@ const SSIProducts = (() => {
         <div style="overflow-x:auto;">
           <table>
             <thead><tr>
-              <th>SKU</th><th>Product Name</th><th>UoM</th><th>Pack Sizes</th><th>Carton Std</th><th>Reorder</th>
+              <th>SKU</th><th>Product Name</th><th>UoM</th><th>Pack Sizes</th><th>Carton/Bag Std</th><th>Reorder</th>
               ${st.units.filter(u=>u.active).map(u=>`<th style="text-align:center;">${u.name}<br><span style="font-size:10px;">Stock</span></th>`).join('')}
               <th>Status</th>${SSIApp.hasRole('ADMIN')?'<th>Actions</th>':''}
             </tr></thead>
@@ -52,7 +52,7 @@ const SSIProducts = (() => {
                   <td><strong>${p.name}</strong>${p.description?`<br><span style="font-size:12px;color:#94a3b8;">${p.description}</span>`:''}</td>
                   <td><span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:12px;font-size:12px;font-weight:600;">${p.uom||'KG'}</span></td>
                   <td style="font-size:12px;color:#64748b;">${packLabels||'—'}</td>
-                  <td style="font-size:13px;">${p.carton_std>0?p.carton_std+' KG/ctn':'—'}</td>
+                  <td style="font-size:13px;">${p.carton_std>0?p.carton_std+' KG/ctn/bag':'—'}</td>
                   <td style="font-size:13px;">${p.reorder_level||'—'}</td>
                   ${unitStocks}
                   <td><span class="badge ${isLowTotal?'badge-low':'badge-ok'}">${isLowTotal?'⚠️ LOW':'✅ OK'}</span></td>
@@ -103,8 +103,8 @@ const SSIProducts = (() => {
             <input id="p-reorder" type="number" min="0" value="${p?.reorder_level||''}" placeholder="e.g. 100">
           </div>
           <div>
-            <label>Carton Standard (KG per carton)</label>
-            <input id="p-carton" type="number" min="0" step="0.001" value="${p?.carton_std||''}" placeholder="e.g. 20 (0 = not applicable)">
+            <label>Carton/Bag Standard (KG per Carton/Bag)</label>
+            <input id="p-carton" type="number" min="0" step="0.001" value="${p?.carton_std||''}" placeholder="e.g. 50 KG per Bag/Carton (0 = N/A)">
           </div>
           <div>
             <label>Default Rate (₹ per KG/Unit)</label>
@@ -162,7 +162,7 @@ const SSIProducts = (() => {
 
   function downloadTemplate() {
     SSIApp.excelDownload([
-      ['Product Name','UoM (KG/NOS)','Description','Reorder Level','Carton Std (KG)','Default Rate','Pack Sizes (comma-separated)'],
+      ['Product Name','UoM (KG/NOS)','Description','Reorder Level','Carton/Bag Std (KG)','Default Rate','Pack Sizes (comma-separated)'],
       ['Calcium Carbonate 1KG','KG','White powder','100','30','45.50','1 KG,30 KG,50 KG'],
       ['Sample Product','KG','Description here','50','0','25','500g,1 KG'],
     ],'Products','SSI_Products_Template');
@@ -183,7 +183,7 @@ const SSIProducts = (() => {
           uom:(r['UoM (KG/NOS)']||'KG').toString().trim(),
           description:(r['Description']||'').toString(),
           reorder_level:parseFloat(r['Reorder Level'])||0,
-          carton_std:parseFloat(r['Carton Std (KG)'])||0,
+          carton_std:parseFloat(r['Carton/Bag Std (KG)'])||0,
           default_rate:parseFloat(r['Default Rate'])||0,
           pack_sizes:(r['Pack Sizes (comma-separated)']||'').toString().split(',').map(s=>s.trim()).filter(Boolean),
           active:true,created_at:new Date().toISOString()
@@ -200,7 +200,7 @@ const SSIProducts = (() => {
 
   function exportExcel() {
     const st = SSIApp.getState();
-    const rows = [['SKU','Product Name','UoM','Description','Reorder Level','Carton Std (KG)','Default Rate','Pack Sizes']];
+    const rows = [['SKU','Product Name','UoM','Description','Reorder Level','Carton/Bag Std (KG)','Default Rate','Pack Sizes']];
     st.products.filter(p=>p.active).forEach(p=>{
       rows.push([p.sku,p.name,p.uom||'KG',p.description||'',p.reorder_level||0,p.carton_std||0,p.default_rate||0,(p.pack_sizes||[]).join(',')]);
     });

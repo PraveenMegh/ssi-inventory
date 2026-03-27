@@ -158,18 +158,19 @@ const SSIApp = {
     }
 
     area.innerHTML = '';
+    // NOTE: modules use `const`, which is NOT on window — use typeof to check
     try {
       switch (page) {
-        case 'dashboard':  window.SSIDashboard ? SSIDashboard.render(area)  : area.innerHTML = _modErr('SSIDashboard');  break;
-        case 'products':   window.SSIProducts  ? SSIProducts.render(area)   : area.innerHTML = _modErr('SSIProducts');   break;
-        case 'clients':    window.SSIClients   ? SSIClients.render(area)    : area.innerHTML = _modErr('SSIClients');    break;
-        case 'inventory':  window.SSIInventory ? SSIInventory.render(area)  : area.innerHTML = _modErr('SSIInventory');  break;
-        case 'orders':     window.SSIOrders    ? SSIOrders.render(area)     : area.innerHTML = _modErr('SSIOrders');     break;
-        case 'dispatch':   window.SSIDispatch  ? SSIDispatch.render(area)   : area.innerHTML = _modErr('SSIDispatch');   break;
-        case 'reports':    window.SSIReports   ? SSIReports.render(area)    : area.innerHTML = _modErr('SSIReports');    break;
-        case 'users':      window.SSIUsers     ? SSIUsers.render(area)      : area.innerHTML = _modErr('SSIUsers');      break;
-        case 'units':      window.SSIUnits     ? SSIUnits.render(area)      : area.innerHTML = _modErr('SSIUnits');      break;
-        default:           window.SSIDashboard ? SSIDashboard.render(area)  : area.innerHTML = _modErr('SSIDashboard');  break;
+        case 'dashboard':  if(typeof SSIDashboard !=='undefined') SSIDashboard.render(area);  else area.innerHTML=_modErr('SSIDashboard');  break;
+        case 'products':   if(typeof SSIProducts  !=='undefined') SSIProducts.render(area);   else area.innerHTML=_modErr('SSIProducts');   break;
+        case 'clients':    if(typeof SSIClients   !=='undefined') SSIClients.render(area);    else area.innerHTML=_modErr('SSIClients');    break;
+        case 'inventory':  if(typeof SSIInventory !=='undefined') SSIInventory.render(area);  else area.innerHTML=_modErr('SSIInventory');  break;
+        case 'orders':     if(typeof SSIOrders    !=='undefined') SSIOrders.render(area);     else area.innerHTML=_modErr('SSIOrders');     break;
+        case 'dispatch':   if(typeof SSIDispatch  !=='undefined') SSIDispatch.render(area);   else area.innerHTML=_modErr('SSIDispatch');   break;
+        case 'reports':    if(typeof SSIReports   !=='undefined') SSIReports.render(area);    else area.innerHTML=_modErr('SSIReports');    break;
+        case 'users':      if(typeof SSIUsers     !=='undefined') SSIUsers.render(area);      else area.innerHTML=_modErr('SSIUsers');      break;
+        case 'units':      if(typeof SSIUnits     !=='undefined') SSIUnits.render(area);      else area.innerHTML=_modErr('SSIUnits');      break;
+        default:           if(typeof SSIDashboard !=='undefined') SSIDashboard.render(area);  else area.innerHTML=_modErr('SSIDashboard');  break;
       }
     } catch (err) {
       console.error('[SSI] Page render error on', page, ':', err);

@@ -16,11 +16,16 @@ const SSIApp = {
 
   // ── Default users (always guaranteed) ─────────────────────
   _DEFAULT_USERS: [
-    { id:'u1', username:'admin',     password:'admin123',    name:'Administrator',    role:'ADMIN',    active:true },
-    { id:'u2', username:'stock1',    password:'stock123',    name:'Stock Manager',    role:'STOCK',    active:true },
-    { id:'u3', username:'dispatch1', password:'dispatch123', name:'Dispatch Officer', role:'DISPATCH', active:true },
-    { id:'u4', username:'sales1',    password:'sales123',    name:'Sales Person 1',   role:'SALES',    active:true },
-    { id:'u5', username:'sales2',    password:'sales456',    name:'Sales Person 2',   role:'SALES',    active:true }
+    { id:'u1',  username:'admin',    password:'admin123',    name:'Administrator',       role:'ADMIN',    active:true },
+    { id:'u2',  username:'stock1',   password:'stock123',    name:'Kajal V',             role:'STOCK',    active:true },
+    { id:'u3',  username:'dispatch1',password:'dispatch123', name:'Amit Jawla',          role:'DISPATCH', active:true },
+    { id:'u4',  username:'vipin',    password:'vipin123',    name:'Vipin Dabas',         role:'SALES',    active:true },
+    { id:'u5',  username:'manish',   password:'manish123',   name:'Manish Srivastava',   role:'SALES',    active:true },
+    { id:'u6',  username:'vishal',   password:'vishal123',   name:'Vishal Sharma',       role:'SALES',    active:true },
+    { id:'u7',  username:'madhu',    password:'madhu123',    name:'Madhu Sharma',        role:'SALES',    active:true },
+    { id:'u8',  username:'raja',     password:'raja123',     name:'Raja',                role:'SALES',    active:true },
+    { id:'u9',  username:'mittal',   password:'mittal123',   name:'Mittal Delhi Team',   role:'SALES',    active:true },
+    { id:'u10', username:'praveen',  password:'praveen123',  name:'Praveen Sharma',      role:'SALES',    active:true }
   ],
 
   // ── State ──────────────────────────────────────────────────

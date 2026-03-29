@@ -99,7 +99,7 @@ const SSIInventory = (() => {
               <th>Pack Mode</th><th style="text-align:right;">Qty (KG/NOS)</th>
               <th style="text-align:right;">Closing Balance</th>
               <th>Bill / Note</th><th>By</th>
-              ${SSIApp.hasRole('ADMIN') ? '<th>Del</th>' : ''}
+              
             </tr></thead>
             <tbody id="inv-tbody">
               ${renderRows(ledger, st)}
@@ -111,7 +111,7 @@ const SSIInventory = (() => {
   }
 
   function renderRows(ledger, st) {
-    if (!ledger.length) return `<tr><td colspan="10" style="text-align:center;padding:40px;color:#94a3b8;">No inventory entries yet. Add your first entry!</td></tr>`;
+    if (!ledger.length) return `<tr><td colspan="9" style="text-align:center;padding:40px;color:#94a3b8;">No inventory entries yet. Add your first entry!</td></tr>`;
     const typeColors     = {IN:'#dcfce7',OUT:'#fee2e2',OPENING:'#dbeafe',ADJUST:'#fef3c7',TRANSFER_OUT:'#fce7f3',TRANSFER_IN:'#ede9fe'};
     const typeTextColors = {IN:'#166534',OUT:'#991b1b',OPENING:'#1e40af',ADJUST:'#92400e',TRANSFER_OUT:'#9d174d',TRANSFER_IN:'#5b21b6'};
     return ledger.map(t => {
@@ -141,7 +141,7 @@ const SSIInventory = (() => {
         </td>
         <td style="font-size:12px;color:#64748b;max-width:150px;">${t.note||'—'}</td>
         <td style="font-size:12px;color:#94a3b8;">${user?.name||t.user_name||'—'}</td>
-        ${SSIApp.hasRole('ADMIN') ? `<td><button class="btn btn-danger btn-sm" onclick="SSIInventory.deleteEntry('${t.id}')">🗑️</button></td>` : ''}
+        
       </tr>`;
     }).join('');
   }

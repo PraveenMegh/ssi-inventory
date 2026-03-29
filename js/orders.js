@@ -240,10 +240,80 @@ const SSIOrders = (() => {
     recalcGrand();
   }
 
+  // ── helper: get the numeric bag/carton size for a row ──────────────────────
+  function _getSizeValue(idx) {
+    const sel = document.querySelector(`.item-size-sel[data-idx="${idx}"]`);
+    if (sel) {
+      if (sel.value === '__custom__') {
+        return parseFloat(document.querySelector(`.item-size-custom[data-idx="${idx}"]`)?.value) || 0;
+      }
+      return parseFloat(sel.value) || 0;
+    }
+    // fallback for CARTON_MAN / CARTON_STD (plain input)
+    return parseFloat(document.querySelector(`.item-size-manual[data-idx="${idx}"]`)?.value) || 0;
+  }
+
+  // ── called when the size <select> changes ───────────────────────────────────
+  function onItemSizeChange(idx) {
+    const sel     = document.querySelector(`.item-size-sel[data-idx="${idx}"]`);
+    const customI = document.querySelector(`.item-size-custom[data-idx="${idx}"]`);
+    const warnEl  = document.querySelector(`.item-size-warning[data-idx="${idx}"]`);
+    if (!sel) return;
+    const isCustom = sel.value === '__custom__';
+    if (customI) customI.style.display = isCustom ? '' : 'none';
+    if (warnEl)  warnEl.style.display  = isCustom ? '' : 'none';
+    calcItemTotal(idx);
+  }
+
+  // ── build size options from a product's pack_sizes array ────────────────────
+  function _buildSizeOpts(prod, selectedSize) {
+    const sizes = (prod?.pack_sizes || []).map(s => {
+      const m = (s + '').match(/[\d.]+/);
+      return m ? parseFloat(m[0]) : null;
+    }).filter(Boolean);
+    let opts = '<option value="">— Select Size —</option>';
+    sizes.forEach(sz => {
+      const sel = (sz === selectedSize) ? 'selected' : '';
+      opts += `<option value="${sz}" ${sel}>${sz} KG</option>`;
+    });
+    opts += `<option value="__custom__" ${!sizes.includes(selectedSize) && selectedSize ? 'selected' : ''}>✏️ Custom…</option>`;
+    return opts;
+  }
+
   function buildItemRow(idx, item, productOpts) {
-    const st = SSIApp.getState();
+    const st   = SSIApp.getState();
     const prod = item.product_id ? st.products.find(p=>p.id===item.product_id) : null;
     const packOpts = PACK_MODES.map(m=>`<option value="${m.value}" ${item.pack_mode===m.value?'selected':''}>${m.label}</option>`).join('');
+    const mode = item.pack_mode || 'BAG';
+
+    // Size cell: BAG → dropdown; CARTON_MAN → free input; CARTON_STD → readonly input; DIRECT_KG/NOS → hidden
+    const hideSize  = (mode === 'DIRECT_KG' || mode === 'NOS');
+    const selectedSz= parseFloat(item.pack_size) || 0;
+    const isCustom  = prod && selectedSz && !(prod.pack_sizes||[]).some(s=>{ const m=(s+'').match(/[\d.]+/); return m&&parseFloat(m[0])===selectedSz; });
+
+    const sizeHTML = `
+      <div id="item-size-wrap-${idx}" style="${hideSize?'display:none;':''}">
+        <label style="font-size:12px;" id="item-size-label-${idx}">Bag Size (KG)</label>
+        ${ mode === 'BAG' ? `
+          <select class="item-size-sel" data-idx="${idx}" onchange="SSIOrders.onItemSizeChange(${idx})" style="font-size:13px;">
+            ${_buildSizeOpts(prod, selectedSz)}
+          </select>
+          <input type="number" class="item-size-custom" data-idx="${idx}" min="0" step="0.001"
+            value="${isCustom ? selectedSz : ''}"
+            placeholder="Enter KG"
+            style="font-size:13px;margin-top:4px;${isCustom?'':'display:none;'}"
+            oninput="SSIOrders.calcItemTotal(${idx})">
+          <div class="item-size-warning" data-idx="${idx}" style="color:#dc2626;font-size:11px;margin-top:3px;${isCustom?'':'display:none;'}">
+            ⚠️ Non-standard size — verify stock availability
+          </div>
+        ` : `
+          <input type="number" class="item-size-manual" data-idx="${idx}" min="0" step="0.001"
+            value="${item.pack_size||''}"
+            placeholder="e.g. 50"
+            ${ mode==='CARTON_STD' ? 'readonly style="background:#f1f5f9;font-size:13px;"' : 'style="font-size:13px;"' }
+            oninput="SSIOrders.calcItemTotal(${idx})">
+        ` }
+      </div>`;
 
     return `<div class="item-row" id="item-row-${idx}" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
@@ -262,10 +332,7 @@ const SSIOrders = (() => {
           <label style="font-size:12px;">Pack Type</label>
           <select class="item-pack-mode" data-idx="${idx}" onchange="SSIOrders.onItemPackChange(${idx})" style="font-size:13px;">${packOpts}</select>
         </div>
-        <div id="item-size-wrap-${idx}">
-          <label style="font-size:12px;">Bag/Ctn Size (KG)</label>
-          <input type="number" class="item-size" data-idx="${idx}" min="0" step="0.001" value="${item.pack_size||''}" placeholder="e.g. 50" style="font-size:13px;" oninput="SSIOrders.calcItemTotal(${idx})">
-        </div>
+        ${sizeHTML}
         <div>
           <label style="font-size:12px;" id="item-count-label-${idx}">No. of Bags</label>
           <input type="number" class="item-count" data-idx="${idx}" min="1" value="${item.count||''}" placeholder="e.g. 30" style="font-size:13px;" oninput="SSIOrders.calcItemTotal(${idx})">
@@ -293,32 +360,94 @@ const SSIOrders = (() => {
     const st   = SSIApp.getState();
     const prod = st.products.find(p=>p.id===productId);
     if (!prod) return;
+
+    // Auto-fill rate
     const rateEl = document.querySelector(`.item-rate[data-idx="${idx}"]`);
     if (rateEl && !rateEl.value && prod.default_rate) rateEl.value = prod.default_rate;
-    const sizeEl = document.querySelector(`.item-size[data-idx="${idx}"]`);
-    if (sizeEl && prod.pack_sizes?.length === 1) {
-      const m = (prod.pack_sizes[0]||'').match(/[\d.]+/);
-      if (m) sizeEl.value = parseFloat(m[0]);
+
+    // Refresh bag-size dropdown with new product's pack_sizes
+    const mode   = document.querySelector(`.item-pack-mode[data-idx="${idx}"]`)?.value || 'BAG';
+    const selEl  = document.querySelector(`.item-size-sel[data-idx="${idx}"]`);
+    if (mode === 'BAG' && selEl) {
+      selEl.innerHTML = _buildSizeOpts(prod, 0);
+      // Auto-select if only one size
+      if ((prod.pack_sizes||[]).length === 1) {
+        const m = (prod.pack_sizes[0]+'').match(/[\d.]+/);
+        if (m) selEl.value = parseFloat(m[0]);
+      }
+      // reset custom
+      const customI = document.querySelector(`.item-size-custom[data-idx="${idx}"]`);
+      const warnEl  = document.querySelector(`.item-size-warning[data-idx="${idx}"]`);
+      if (customI) { customI.value = ''; customI.style.display = 'none'; }
+      if (warnEl)  warnEl.style.display = 'none';
     }
     calcItemTotal(idx);
   }
 
   function onItemPackChange(idx) {
-    const mode  = document.querySelector(`.item-pack-mode[data-idx="${idx}"]`)?.value;
-    const label = document.getElementById(`item-count-label-${idx}`);
+    const mode     = document.querySelector(`.item-pack-mode[data-idx="${idx}"]`)?.value;
+    const label    = document.getElementById(`item-count-label-${idx}`);
     const sizeWrap = document.getElementById(`item-size-wrap-${idx}`);
-    if (label) {
-      label.textContent = mode==='NOS' ? 'Quantity' : mode==='BAG' ? 'No. of Bags' : 'No. of Cartons';
-    }
-    if (sizeWrap) {
-      sizeWrap.style.display = (mode==='DIRECT_KG'||mode==='NOS') ? 'none' : '';
-    }
-    if (mode === 'CARTON_STD') {
-      const productId = document.querySelector(`.item-product[data-idx="${idx}"]`)?.value;
-      if (productId) {
-        const prod = SSIApp.getState().products.find(p=>p.id===productId);
-        const sizeEl = document.querySelector(`.item-size[data-idx="${idx}"]`);
-        if (sizeEl && prod?.carton_std) sizeEl.value = prod.carton_std;
+    const sizeLabel= document.getElementById(`item-size-label-${idx}`);
+
+    if (label) label.textContent = mode==='NOS' ? 'Quantity' : mode==='BAG' ? 'No. of Bags' : 'No. of Cartons';
+    if (sizeLabel) sizeLabel.textContent = mode==='BAG' ? 'Bag Size (KG)' : 'Ctn Size (KG)';
+    if (sizeWrap) sizeWrap.style.display = (mode==='DIRECT_KG'||mode==='NOS') ? 'none' : '';
+
+    const productId = document.querySelector(`.item-product[data-idx="${idx}"]`)?.value;
+    const prod      = productId ? SSIApp.getState().products.find(p=>p.id===productId) : null;
+
+    if (mode === 'BAG') {
+      // Rebuild size wrap contents to show the dropdown
+      if (sizeWrap) {
+        // Replace any manual input with the select+custom+warning combo
+        const existingSel = sizeWrap.querySelector('.item-size-sel');
+        if (!existingSel) {
+          // Rebuild inner HTML
+          sizeWrap.innerHTML = `
+            <label style="font-size:12px;" id="item-size-label-${idx}">Bag Size (KG)</label>
+            <select class="item-size-sel" data-idx="${idx}" onchange="SSIOrders.onItemSizeChange(${idx})" style="font-size:13px;">
+              ${_buildSizeOpts(prod, 0)}
+            </select>
+            <input type="number" class="item-size-custom" data-idx="${idx}" min="0" step="0.001"
+              placeholder="Enter KG" style="font-size:13px;margin-top:4px;display:none;"
+              oninput="SSIOrders.calcItemTotal(${idx})">
+            <div class="item-size-warning" data-idx="${idx}" style="color:#dc2626;font-size:11px;margin-top:3px;display:none;">
+              ⚠️ Non-standard size — verify stock availability
+            </div>`;
+        } else {
+          // Just refresh the options
+          existingSel.innerHTML = _buildSizeOpts(prod, 0);
+          const customI = sizeWrap.querySelector('.item-size-custom');
+          const warnEl  = sizeWrap.querySelector('.item-size-warning');
+          if (customI) { customI.value = ''; customI.style.display = 'none'; }
+          if (warnEl)  warnEl.style.display = 'none';
+        }
+        if (prod && (prod.pack_sizes||[]).length === 1) {
+          const m = (prod.pack_sizes[0]+'').match(/[\d.]+/);
+          const sel2 = sizeWrap.querySelector('.item-size-sel');
+          if (m && sel2) sel2.value = parseFloat(m[0]);
+        }
+      }
+    } else {
+      // CARTON_STD / CARTON_MAN — replace dropdown with plain input
+      if (sizeWrap) {
+        const existingManual = sizeWrap.querySelector('.item-size-manual');
+        if (!existingManual) {
+          sizeWrap.innerHTML = `
+            <label style="font-size:12px;" id="item-size-label-${idx}">${mode==='BAG'?'Bag':'Ctn'} Size (KG)</label>
+            <input type="number" class="item-size-manual" data-idx="${idx}" min="0" step="0.001"
+              placeholder="e.g. 50"
+              ${ mode==='CARTON_STD' ? 'readonly style="background:#f1f5f9;font-size:13px;"' : 'style="font-size:13px;"' }
+              oninput="SSIOrders.calcItemTotal(${idx})">` ;
+        } else {
+          existingManual.readOnly = (mode === 'CARTON_STD');
+          existingManual.style.background = mode==='CARTON_STD' ? '#f1f5f9' : '';
+        }
+        if (mode === 'CARTON_STD' && prod?.carton_std) {
+          const manI = sizeWrap.querySelector('.item-size-manual');
+          if (manI) manI.value = prod.carton_std;
+        }
       }
     }
     calcItemTotal(idx);
@@ -326,7 +455,7 @@ const SSIOrders = (() => {
 
   function calcItemTotal(idx) {
     const mode   = document.querySelector(`.item-pack-mode[data-idx="${idx}"]`)?.value || 'BAG';
-    const size   = parseFloat(document.querySelector(`.item-size[data-idx="${idx}"]`)?.value) || 0;
+    const size   = _getSizeValue(idx);
     const count  = parseFloat(document.querySelector(`.item-count[data-idx="${idx}"]`)?.value) || 0;
     const rate   = parseFloat(document.querySelector(`.item-rate[data-idx="${idx}"]`)?.value) || 0;
 
@@ -358,7 +487,7 @@ const SSIOrders = (() => {
     const currency = document.getElementById('ord-currency')?.value || 'INR';
     rows.forEach((row, idx) => {
       const mode  = document.querySelector(`.item-pack-mode[data-idx="${idx}"]`)?.value || 'BAG';
-      const size  = parseFloat(document.querySelector(`.item-size[data-idx="${idx}"]`)?.value) || 0;
+      const size  = _getSizeValue(idx);
       const count = parseFloat(document.querySelector(`.item-count[data-idx="${idx}"]`)?.value) || 0;
       const rate  = parseFloat(document.querySelector(`.item-rate[data-idx="${idx}"]`)?.value) || 0;
       let qty = (mode==='DIRECT_KG'||mode==='NOS') ? count : size*count;
@@ -404,7 +533,7 @@ const SSIOrders = (() => {
       const productId = document.querySelector(`.item-product[data-idx="${idx}"]`)?.value;
       if (!productId) return;
       const mode  = document.querySelector(`.item-pack-mode[data-idx="${idx}"]`)?.value || 'BAG';
-      const size  = parseFloat(document.querySelector(`.item-size[data-idx="${idx}"]`)?.value) || 0;
+      const size  = _getSizeValue(idx);
       const count = parseFloat(document.querySelector(`.item-count[data-idx="${idx}"]`)?.value) || 0;
       const rate  = parseFloat(document.querySelector(`.item-rate[data-idx="${idx}"]`)?.value) || 0;
       let totalQty = (mode==='DIRECT_KG'||mode==='NOS') ? count : size*count;
@@ -425,6 +554,23 @@ const SSIOrders = (() => {
     if (!date || !unitId || !clientId) { SSIApp.toast('Please fill Date, Unit and Client', 'error'); return; }
     if (!items.length) { SSIApp.toast('Add at least one order item', 'error'); return; }
     if (items.some(i=>i.total_qty<=0)) { SSIApp.toast('All items must have quantity > 0', 'error'); return; }
+
+    // Warn if any BAG item uses a size not in the product's pack_sizes
+    const st2 = SSIApp.getState();
+    const nonStdItems = items.filter(it => {
+      if (it.pack_mode !== 'BAG' || !it.pack_size) return false;
+      const p = st2.products.find(x=>x.id===it.product_id);
+      if (!p || !(p.pack_sizes||[]).length) return false;
+      return !(p.pack_sizes||[]).some(s=>{ const m=(s+'').match(/[\d.]+/); return m&&Math.abs(parseFloat(m[0])-it.pack_size)<0.001; });
+    });
+    if (nonStdItems.length && status === 'SUBMITTED') {
+      const names = nonStdItems.map(it=>{
+        const p = st2.products.find(x=>x.id===it.product_id);
+        return `${p?.name||it.product_id} (${it.pack_size} KG)`;
+      }).join(', ');
+      const ok = confirm(`⚠️ Non-standard bag size detected:\n${names}\n\nThis size is NOT in the product's pack sizes. Continue submitting?`);
+      if (!ok) return;
+    }
 
     const totalKg    = items.reduce((s,i)=>s+(i.total_qty||0), 0);
     const totalValue = items.reduce((s,i)=>s+(i.line_total||0), 0);

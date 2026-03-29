@@ -118,7 +118,8 @@ const SSIOrders = (() => {
                   <td style="white-space:nowrap;">
                     <button class="btn btn-secondary btn-sm" onclick="SSIOrders.viewOrder('${o.id}')">👁️</button>
                     ${canEdit ? `<button class="btn btn-secondary btn-sm" onclick="SSIOrders.openForm('${o.id}')">✏️</button>` : ''}
-                    ${canCancel ? `<button class="btn btn-danger btn-sm" onclick="SSIOrders.cancelOrder('${o.id}')">✕</button>` : ''}
+                    ${canCancel ? `<button class="btn btn-danger btn-sm" onclick="SSIOrders.cancelOrder('${o.id}')">✕ Cancel</button>` : ''}
+                    ${SSIApp.hasRole('ADMIN') ? `<button class="btn btn-danger btn-sm" onclick="SSIOrders.deleteOrder('${o.id}')" title="Permanently delete order">🗑️</button>` : ''}
                   </td>
                 </tr>`;
               }).join('') || `<tr><td colspan="12" style="text-align:center;padding:40px;color:#94a3b8;">No orders yet. Create your first order!</td></tr>`}
@@ -320,7 +321,7 @@ const SSIOrders = (() => {
         <strong style="font-size:13px;color:#64748b;">Item ${idx+1}</strong>
         <button onclick="SSIOrders.removeItemRow(${idx})" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:18px;">✕</button>
       </div>
-      <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr;gap:10px;align-items:end;">
+      <div style="display:grid;grid-template-columns:2fr 1.4fr 1.4fr 1fr 1fr 1fr;gap:10px;align-items:end;">
         <div>
           <label style="font-size:12px;">Product</label>
           <select class="item-product" data-idx="${idx}" onchange="SSIOrders.onItemProductChange(${idx})" style="font-size:13px;">
@@ -744,6 +745,22 @@ const SSIOrders = (() => {
     refresh(document.getElementById('page-area'));
   }
 
+  // ── Permanently delete an order (ADMIN only) ────────────────────────────
+  async function deleteOrder(orderId) {
+    const st  = SSIApp.getState();
+    const o   = st.orders.find(x=>x.id===orderId);
+    if (!o) return;
+    const ok  = await SSIApp.confirm(
+      `Permanently DELETE order ${o.order_no}?\n\nThis cannot be undone. Inventory transactions from this order will NOT be reversed.`
+    );
+    if (!ok) return;
+    st.orders = st.orders.filter(x=>x.id!==orderId);
+    SSIApp.saveState(st);
+    SSIApp.toast(`Order ${o.order_no} deleted ✅`);
+    SSIApp.audit('ORDER_DELETE', `${o.order_no} deleted by admin`);
+    refresh(document.getElementById('page-area'));
+  }
+
   function exportExcel() {
     const st   = SSIApp.getState();
     const rows = [['Order #','Date','Client','GST No','Unit','Ordered KG','Dispatched KG','Ordered Value','Dispatched Value','Currency','Urgent','Status','Modified?','Salesperson','Dispatch Note','Remarks']];
@@ -770,5 +787,5 @@ const SSIOrders = (() => {
     SSIApp.toast('Orders exported ✅');
   }
 
-  return { render, refresh, openForm, saveOrder, viewOrder, cancelOrder, addItemRow, removeItemRow, toggleUrgent, calcItemTotal, onItemProductChange, onItemPackChange, recalcGrand, applyFilter, exportExcel };
+  return { render, refresh, openForm, saveOrder, viewOrder, cancelOrder, deleteOrder, addItemRow, removeItemRow, toggleUrgent, calcItemTotal, onItemProductChange, onItemPackChange, onItemSizeChange, recalcGrand, applyFilter, exportExcel };
 })();

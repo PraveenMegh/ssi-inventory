@@ -1,6 +1,6 @@
 // ============================================================
-//  SSI Inventory — Auth Module
-//  auth.js — works with new index.html + app.js
+//  SSI Inventory — Auth Module  (updated with salary module)
+//  auth.js
 // ============================================================
 
 const SSIAuth = (() => {
@@ -15,7 +15,10 @@ const SSIAuth = (() => {
       { page: 'dispatch',   icon: '🚚', label: 'Dispatch'          },
       { page: 'reports',    icon: '📈', label: 'Reports'           },
       { page: 'users',      icon: '👤', label: 'Users'             },
-      { page: 'units',      icon: '🏢', label: 'Units / Locations' }
+      { page: 'units',      icon: '🏢', label: 'Units / Locations' },
+      { page: 'employees',  icon: '👥', label: 'Employees'         },
+      { page: 'attendance', icon: '🗓️', label: 'Attendance'        },
+      { page: 'payroll',    icon: '💰', label: 'Payroll'           },
     ],
     STOCK: [
       { page: 'dashboard',  icon: '📊', label: 'Dashboard' },
@@ -29,6 +32,12 @@ const SSIAuth = (() => {
       { page: 'dashboard',  icon: '📊', label: 'Dashboard'        },
       { page: 'orders',     icon: '🛒', label: 'Sales Orders'      },
       { page: 'clients',    icon: '👥', label: 'Clients / Vendors'  }
+    ],
+    ACCOUNTANT: [
+      { page: 'dashboard',  icon: '📊', label: 'Dashboard'  },
+      { page: 'employees',  icon: '👥', label: 'Employees'  },
+      { page: 'attendance', icon: '🗓️', label: 'Attendance' },
+      { page: 'payroll',    icon: '💰', label: 'Payroll'    },
     ]
   };
 
@@ -77,7 +86,11 @@ const SSIAuth = (() => {
     if (topName) topName.textContent = user.name;
     if (topRole) topRole.textContent = user.role;
 
-    const defaultPage = { ADMIN:'dashboard', STOCK:'inventory', DISPATCH:'dispatch', SALES:'orders' };
+    const defaultPage = {
+      ADMIN:'dashboard', STOCK:'inventory',
+      DISPATCH:'dispatch', SALES:'orders',
+      ACCOUNTANT:'payroll'
+    };
     SSIApp.navigate(defaultPage[user.role] || 'dashboard');
   }
 

@@ -32,6 +32,7 @@ const SSIApp = {
   state: {
     users: [], products: [], clients: [],
     orders: [], inventory: [], units: [],
+    employees: [], attendance: [], payroll: [],
     currentUser: null, lastSaved: null
   },
 
@@ -145,16 +146,19 @@ const SSIApp = {
       clients:'👥 Clients / Vendors', inventory:'🏭 Inventory Ledger',
       orders:'🛒 Sales Orders',       dispatch:'🚚 Dispatch',
       reports:'📈 Reports',           users:'👤 User Management',
-      units:'🏢 Units / Locations'
+      units:'🏢 Units / Locations',
+      employees:'👥 Employees',       attendance:'🗓️ Attendance',
+      payroll:'💰 Payroll'
     };
     const t = document.getElementById('page-title');
     if (t) t.textContent = titles[page] || page;
 
     const allowed = {
-      ADMIN:    ['dashboard','products','clients','inventory','orders','dispatch','reports','users','units'],
-      STOCK:    ['dashboard','inventory'],
-      DISPATCH: ['dashboard','dispatch'],
-      SALES:    ['dashboard','orders','clients']
+      ADMIN:       ['dashboard','products','clients','inventory','orders','dispatch','reports','users','units','employees','attendance','payroll'],
+      STOCK:       ['dashboard','inventory'],
+      DISPATCH:    ['dashboard','dispatch'],
+      SALES:       ['dashboard','orders','clients'],
+      ACCOUNTANT:  ['dashboard','employees','attendance','payroll']
     };
 
     if (!(allowed[u.role] || []).includes(page)) {
@@ -174,7 +178,10 @@ const SSIApp = {
         case 'dispatch':   if(typeof SSIDispatch  !=='undefined') SSIDispatch.render(area);   else area.innerHTML=_modErr('SSIDispatch');   break;
         case 'reports':    if(typeof SSIReports   !=='undefined') SSIReports.render(area);    else area.innerHTML=_modErr('SSIReports');    break;
         case 'users':      if(typeof SSIUsers     !=='undefined') SSIUsers.render(area);      else area.innerHTML=_modErr('SSIUsers');      break;
-        case 'units':      if(typeof SSIUnits     !=='undefined') SSIUnits.render(area);      else area.innerHTML=_modErr('SSIUnits');      break;
+        case 'units':       if(typeof SSIUnits      !=='undefined') SSIUnits.render(area);       else area.innerHTML=_modErr('SSIUnits');       break;
+        case 'employees':   if(typeof SSIEmployees  !=='undefined') SSIEmployees.render(area);   else area.innerHTML=_modErr('SSIEmployees');   break;
+        case 'attendance':  if(typeof SSIAttendance !=='undefined') SSIAttendance.render(area);  else area.innerHTML=_modErr('SSIAttendance');  break;
+        case 'payroll':     if(typeof SSIPayroll    !=='undefined') SSIPayroll.render(area);     else area.innerHTML=_modErr('SSIPayroll');     break;
         default:           if(typeof SSIDashboard !=='undefined') SSIDashboard.render(area);  else area.innerHTML=_modErr('SSIDashboard');  break;
       }
     } catch (err) {
@@ -266,6 +273,7 @@ const SSIApp = {
     ov.addEventListener('click', e => { if (e.target === ov) this.closeModal(); });
     document.body.appendChild(ov);
   },
+  modal(html) { this.showModal(html); },  // alias for showModal
   closeModal() {
     const m = document.getElementById('ssi-modal');
     if (m) m.remove();

@@ -661,14 +661,33 @@ const SSIInventory = (() => {
     if (!SSIApp.hasRole('ADMIN')) return;
     const st = SSIApp.getState();
     const count = (st.inventory||[]).length;
-    if (count === 0) { SSIApp.toast('Inventory is already empty.', 'info'); return; }
+    if (count === 0) { SSIApp.toast('Inventory is already empty.'); return; }
+
     const ok = await SSIApp.confirm(
       `⚠️ RESET INVENTORY TO ZERO?\n\nThis will permanently DELETE all ${count} inventory entries.\nOrders and dispatch records are NOT affected.\n\nThis CANNOT be undone. Continue?`
     );
     if (!ok) return;
-    st.inventory = [];
-    SSIApp.saveState(st);
+
+    // ── 1. Wipe inventory in the live state object immediately ──
+    SSIApp.state.inventory = [];
     SSIApp.audit('INVENTORY_RESET', `All ${count} inventory entries cleared by admin`);
+
+    // ── 2. Persist to localStorage right away (instant, no race) ──
+    try { localStorage.setItem('ssiData', JSON.stringify(SSIApp.state)); } catch(e) {}
+
+    // ── 3. Force-write to Firestore directly, bypassing _isSaving guard ──
+    if (window.SSIFirebase && SSIFirebase.db) {
+      try {
+        const DOC = SSIFirebase.db.collection('ssi').doc('data');
+        await DOC.set(SSIApp.state);
+        // Update localStorage again after confirmed Firestore write
+        try { localStorage.setItem('ssiData', JSON.stringify(SSIApp.state)); } catch(e) {}
+      } catch(err) {
+        console.error('[ClearInventory] Firestore write failed:', err.message);
+        SSIApp.toast('⚠️ Saved locally only — sync may retry shortly');
+      }
+    }
+
     SSIApp.toast(`✅ Inventory reset — ${count} entries removed`);
     refresh(document.getElementById('page-area'));
   }

@@ -91,7 +91,7 @@ const SSIInventory = (() => {
             </tbody>
           </table>
         </div>
-        <div id="inv-count" style="margin-top:12px;font-size:13px;color:#94a3b8;">Total: ${ledger.length} entries</div>
+        <div id="inv-count-total" style="margin-top:12px;font-size:13px;color:#94a3b8;">Total: ${ledger.length} entries</div>
       </div>`;
   }
 
@@ -121,12 +121,12 @@ const SSIInventory = (() => {
   }
 
   function applyFilter() {
-    const unitF    = document.getElementById('inv-filter-unit')?.value    || '';
-    const prodF    = document.getElementById('inv-filter-product')?.value || '';
-    const typeF    = document.getElementById('inv-filter-type')?.value    || '';
-    const fromF    = document.getElementById('inv-filter-from')?.value    || '';
-    const toF      = document.getElementById('inv-filter-to')?.value      || '';
-    const rows     = document.querySelectorAll('#inv-tbody tr[data-unit]');
+    const unitF = document.getElementById('inv-filter-unit')?.value    || '';
+    const prodF = document.getElementById('inv-filter-product')?.value || '';
+    const typeF = document.getElementById('inv-filter-type')?.value    || '';
+    const fromF = document.getElementById('inv-filter-from')?.value    || '';
+    const toF   = document.getElementById('inv-filter-to')?.value      || '';
+    const rows  = document.querySelectorAll('#inv-tbody tr[data-unit]');
     let visible = 0;
     rows.forEach(row => {
       const show = (!unitF || row.dataset.unit===unitF)
@@ -137,7 +137,7 @@ const SSIInventory = (() => {
       row.style.display = show ? '' : 'none';
       if (show) visible++;
     });
-    const cnt = document.getElementById('inv-count');
+    const cnt = document.getElementById('inv-count-total');
     if (cnt) cnt.textContent = `Showing: ${visible} entries`;
   }
 
@@ -233,172 +233,224 @@ const SSIInventory = (() => {
       return;
     }
 
-    const st = SSIApp.getState();
+    const st   = SSIApp.getState();
     const prod = st.products.find(p => p.id === productId);
     if (!prod) return;
 
     const currentStock = SSIApp.getStock(productId, unitId);
     const isNOS = prod.uom === 'NOS';
 
-    // Show info card
-    document.getElementById('inv-uom-badge').textContent    = prod.uom || 'KG';
-    document.getElementById('inv-pack-sizes').textContent   = (prod.pack_sizes||[]).join(', ') || '—';
-    document.getElementById('inv-carton-std').textContent   = prod.carton_std > 0 ? prod.carton_std + ' KG/ctn' : '—';
+    document.getElementById('inv-uom-badge').textContent  = prod.uom || 'KG';
+    document.getElementById('inv-pack-sizes').textContent = (prod.pack_sizes||[]).join(', ') || '—';
+    document.getElementById('inv-carton-std').textContent = prod.carton_std > 0 ? prod.carton_std + ' KG/ctn' : '—';
     const stockEl = document.getElementById('inv-current-stock');
     stockEl.textContent = SSIApp.qtyFmt(currentStock) + ' ' + (prod.uom || 'KG');
     stockEl.style.color = currentStock <= 0 ? '#dc2626' : currentStock <= (prod.reorder_level||0) ? '#d97706' : '#16a34a';
     infoCard.style.display = 'block';
     packSec.style.display  = 'block';
 
-    // Set default pack mode for NOS
-    if (isNOS) {
-      document.getElementById('inv-pack-mode').value = 'NOS';
-    }
+    if (isNOS) document.getElementById('inv-pack-mode').value = 'NOS';
     onPackModeChange();
   }
 
+  // ─── Build the pack-fields HTML and wire up events ─────────
   function onPackModeChange() {
-    const mode = document.getElementById('inv-pack-mode')?.value;
+    const mode      = document.getElementById('inv-pack-mode')?.value;
     const fieldsDiv = document.getElementById('inv-pack-fields');
     const totalDiv  = document.getElementById('inv-total-display');
     if (!fieldsDiv) return;
 
     const productId = document.getElementById('inv-product')?.value;
-    const st = SSIApp.getState();
+    const st   = SSIApp.getState();
     const prod = productId ? st.products.find(p=>p.id===productId) : null;
-
-    // Build pack size options
     const packOpts = (prod?.pack_sizes||[]).map(s=>`<option value="${s}">${s}</option>`).join('');
 
+    // Build HTML (NO inline onchange/oninput — we wire events below)
     let html = '';
+
     if (mode === 'BAG') {
       html = `
         <div>
           <label>Bag Size (KG)</label>
-          <select id="inv-bag-size" onchange="SSIInventory.calcTotal()">
-            <option value="">—Select—</option>
+          <select id="inv-bag-size">
+            <option value="">— Select —</option>
             ${packOpts}
             <option value="custom">Custom...</option>
           </select>
         </div>
         <div id="inv-bag-custom-wrap" style="display:none;">
           <label>Custom Bag Size (KG)</label>
-          <input type="number" id="inv-bag-custom" min="0.001" step="0.001" placeholder="e.g. 25" oninput="SSIInventory.calcTotal()">
+          <input type="number" id="inv-bag-custom" min="0.001" step="0.001" value="" placeholder="e.g. 25">
         </div>
         <div>
           <label>No. of Bags *</label>
-          <input type="number" id="inv-count" min="1" placeholder="e.g. 30" oninput="SSIInventory.calcTotal()">
+          <input type="number" id="inv-bags-count" min="1" step="1" value="" placeholder="e.g. 100">
         </div>`;
     } else if (mode === 'CARTON_STD') {
       const stdKg = prod?.carton_std || 0;
       html = `
         <div>
           <label>KG per Carton (from product)</label>
-          <input type="number" id="inv-carton-kg" value="${stdKg}" readonly style="background:#f1f5f9;">
+          <input type="number" id="inv-ctn-kg" value="${stdKg}" readonly style="background:#f1f5f9;">
         </div>
         <div>
           <label>No. of Cartons *</label>
-          <input type="number" id="inv-count" min="1" placeholder="e.g. 50" oninput="SSIInventory.calcTotal()">
+          <input type="number" id="inv-ctn-count" min="1" step="1" value="" placeholder="e.g. 50">
         </div>`;
     } else if (mode === 'CARTON_MAN') {
       html = `
         <div>
           <label>KG per Carton *</label>
-          <input type="number" id="inv-carton-kg" min="0.001" step="0.001" placeholder="e.g. 20" oninput="SSIInventory.calcTotal()">
+          <input type="number" id="inv-ctn-kg" min="0.001" step="0.001" value="" placeholder="e.g. 20">
         </div>
         <div>
           <label>No. of Cartons *</label>
-          <input type="number" id="inv-count" min="1" placeholder="e.g. 75" oninput="SSIInventory.calcTotal()">
+          <input type="number" id="inv-ctn-count" min="1" step="1" value="" placeholder="e.g. 75">
         </div>`;
     } else if (mode === 'DIRECT_KG') {
       html = `
         <div style="grid-column:span 3;">
           <label>Direct KG Quantity *</label>
-          <input type="number" id="inv-direct-qty" min="0.001" step="0.001" placeholder="e.g. 1500" oninput="SSIInventory.calcTotal()">
+          <input type="number" id="inv-direct-qty" min="0.001" step="0.001" value="" placeholder="e.g. 1500">
         </div>`;
     } else if (mode === 'NOS') {
       html = `
         <div style="grid-column:span 3;">
           <label>Number of Units *</label>
-          <input type="number" id="inv-direct-qty" min="1" placeholder="e.g. 200" oninput="SSIInventory.calcTotal()">
+          <input type="number" id="inv-direct-qty" min="1" step="1" value="" placeholder="e.g. 200">
         </div>`;
     }
 
     fieldsDiv.innerHTML = html;
-    totalDiv.style.display = 'block';
+    if (totalDiv) totalDiv.style.display = 'block';
 
-    // handle custom bag size
-    const bagSizeEl = document.getElementById('inv-bag-size');
-    if (bagSizeEl) {
-      bagSizeEl.onchange = () => {
-        const wrap = document.getElementById('inv-bag-custom-wrap');
-        if (bagSizeEl.value === 'custom') { if(wrap) wrap.style.display='block'; }
-        else { if(wrap) wrap.style.display='none'; }
-        calcTotal();
-      };
-    }
-    calcTotal();
+    // ─── Wire up ALL events with addEventListener (reliable) ──
+    _wireEvents(mode);
+    calcTotal();  // Show 0 initially until user fills fields
   }
 
-  function calcTotal() {
+  // Wire all input events after DOM insertion
+  function _wireEvents(mode) {
+    if (mode === 'BAG') {
+      const bagSizeEl = document.getElementById('inv-bag-size');
+      const customWrap = document.getElementById('inv-bag-custom-wrap');
+      const customInput = document.getElementById('inv-bag-custom');
+      const countInput  = document.getElementById('inv-bags-count');
+
+      if (bagSizeEl) {
+        bagSizeEl.addEventListener('change', () => {
+          if (!customWrap || !customInput) return;
+          if (bagSizeEl.value === 'custom') {
+            customWrap.style.display = 'block';
+            customInput.focus();
+          } else {
+            customWrap.style.display = 'none';
+            customInput.value = '';
+          }
+          calcTotal();
+        });
+      }
+      if (customInput) customInput.addEventListener('input', calcTotal);
+      if (countInput)  countInput.addEventListener('input',  calcTotal);
+
+    } else if (mode === 'CARTON_STD' || mode === 'CARTON_MAN') {
+      const kgEl    = document.getElementById('inv-ctn-kg');
+      const cntEl   = document.getElementById('inv-ctn-count');
+      if (kgEl)  kgEl.addEventListener('input',  calcTotal);
+      if (cntEl) cntEl.addEventListener('input', calcTotal);
+
+    } else if (mode === 'DIRECT_KG' || mode === 'NOS') {
+      const dqEl = document.getElementById('inv-direct-qty');
+      if (dqEl) dqEl.addEventListener('input', calcTotal);
+    }
+  }
+
+  // ─── Compute qty from form — returns a number ───────────────
+  function _getQty() {
     const mode = document.getElementById('inv-pack-mode')?.value;
+    if (!mode) return 0;
+
+    let qty = 0;
+
+    if (mode === 'BAG') {
+      const bagSizeEl   = document.getElementById('inv-bag-size');
+      const customInput = document.getElementById('inv-bag-custom');
+      const countInput  = document.getElementById('inv-bags-count');
+
+      let bagSize = 0;
+      if (bagSizeEl) {
+        if (bagSizeEl.value === 'custom') {
+          bagSize = parseFloat(customInput?.value || 0) || 0;
+        } else if (bagSizeEl.value !== '') {
+          // The value may be a string like "1 KG" or just "1"
+          const raw = bagSizeEl.value.replace(/[^\d.]/g, '');
+          bagSize = parseFloat(raw) || 0;
+        }
+      }
+      const bags = parseFloat(countInput?.value || 0) || 0;
+      qty = bagSize * bags;
+
+    } else if (mode === 'CARTON_STD' || mode === 'CARTON_MAN') {
+      const kgPerCtn = parseFloat(document.getElementById('inv-ctn-kg')?.value    || 0) || 0;
+      const cartons  = parseFloat(document.getElementById('inv-ctn-count')?.value || 0) || 0;
+      qty = kgPerCtn * cartons;
+
+    } else if (mode === 'DIRECT_KG' || mode === 'NOS') {
+      qty = parseFloat(document.getElementById('inv-direct-qty')?.value || 0) || 0;
+    }
+
+    return qty;
+  }
+
+  // Update the total display
+  function calcTotal() {
     const totalEl = document.getElementById('inv-total-qty');
     const uomEl   = document.getElementById('inv-total-uom');
     if (!totalEl) return;
 
-    let qty = 0;
-    if (mode === 'BAG') {
-      const bagSizeEl = document.getElementById('inv-bag-size');
-      let bagSize = 0;
-      if (bagSizeEl) {
-        if (bagSizeEl.value === 'custom') {
-          bagSize = parseFloat(document.getElementById('inv-bag-custom')?.value) || 0;
-        } else {
-          // parse numeric value from label like "30 KG"
-          bagSize = parseFloat(bagSizeEl.value) || 0;
-          if (!bagSize) {
-            // try extracting number
-            const m = (bagSizeEl.value||'').match(/[\d.]+/);
-            bagSize = m ? parseFloat(m[0]) : 0;
-            // handle grams
-            if ((bagSizeEl.value||'').toLowerCase().includes('g') && !bagSizeEl.value.toLowerCase().includes('kg')) {
-              bagSize = bagSize / 1000;
-            }
-          }
-        }
-      }
-      const count = parseFloat(document.getElementById('inv-count')?.value) || 0;
-      qty = bagSize * count;
-    } else if (mode === 'CARTON_STD' || mode === 'CARTON_MAN') {
-      const kgPerCtn = parseFloat(document.getElementById('inv-carton-kg')?.value) || 0;
-      const count    = parseFloat(document.getElementById('inv-count')?.value) || 0;
-      qty = kgPerCtn * count;
-    } else if (mode === 'DIRECT_KG' || mode === 'NOS') {
-      qty = parseFloat(document.getElementById('inv-direct-qty')?.value) || 0;
-    }
+    const qty = _getQty();
 
+    const mode      = document.getElementById('inv-pack-mode')?.value;
     const productId = document.getElementById('inv-product')?.value;
-    const st = SSIApp.getState();
+    const st   = SSIApp.getState();
     const prod = productId ? st.products.find(p=>p.id===productId) : null;
-    const uom = (mode === 'NOS' || prod?.uom === 'NOS') ? 'NOS' : 'KG';
+    const uom  = (mode === 'NOS' || prod?.uom === 'NOS') ? 'NOS' : 'KG';
 
     totalEl.textContent = SSIApp.qtyFmt(qty);
     if (uomEl) uomEl.textContent = ' ' + uom;
+
+    // Colour feedback: red if 0, green if > 0
+    const displayBox = document.getElementById('inv-total-display');
+    if (displayBox) {
+      if (qty > 0) {
+        displayBox.style.borderColor = '#16a34a';
+        displayBox.style.background  = '#f0fdf4';
+        totalEl.style.color = '#16a34a';
+      } else {
+        displayBox.style.borderColor = '#e2e8f0';
+        displayBox.style.background  = '#f8fafc';
+        totalEl.style.color = '#94a3b8';
+      }
+    }
   }
 
   function getPackDesc() {
     const mode = document.getElementById('inv-pack-mode')?.value;
     if (mode === 'BAG') {
-      const bagSizeEl = document.getElementById('inv-bag-size');
-      let bagSize = bagSizeEl?.value === 'custom'
-        ? (document.getElementById('inv-bag-custom')?.value + ' KG (custom)')
-        : bagSizeEl?.value || '?';
-      const count = document.getElementById('inv-count')?.value || '?';
-      return `Bags: ${bagSize} × ${count}`;
+      const bagSizeEl   = document.getElementById('inv-bag-size');
+      const customInput = document.getElementById('inv-bag-custom');
+      let bagSizeLabel = '';
+      if (bagSizeEl?.value === 'custom') {
+        bagSizeLabel = (customInput?.value || '?') + ' KG (custom)';
+      } else {
+        bagSizeLabel = bagSizeEl?.value || '?';
+      }
+      const bags = document.getElementById('inv-bags-count')?.value || '?';
+      return `Bags: ${bagSizeLabel} × ${bags}`;
     } else if (mode === 'CARTON_STD') {
-      return `Cartons (Std ${document.getElementById('inv-carton-kg')?.value} KG) × ${document.getElementById('inv-count')?.value}`;
+      return `Cartons (Std ${document.getElementById('inv-ctn-kg')?.value} KG) × ${document.getElementById('inv-ctn-count')?.value}`;
     } else if (mode === 'CARTON_MAN') {
-      return `Cartons (${document.getElementById('inv-carton-kg')?.value} KG) × ${document.getElementById('inv-count')?.value}`;
+      return `Cartons (${document.getElementById('inv-ctn-kg')?.value} KG) × ${document.getElementById('inv-ctn-count')?.value}`;
     } else if (mode === 'DIRECT_KG') {
       return 'Direct KG';
     } else if (mode === 'NOS') {
@@ -407,29 +459,39 @@ const SSIInventory = (() => {
     return '—';
   }
 
-  function saveEntry() {
+  async function saveEntry() {
     const date      = document.getElementById('inv-date')?.value;
     const type      = document.getElementById('inv-type')?.value;
     const unitId    = document.getElementById('inv-unit')?.value;
     const productId = document.getElementById('inv-product')?.value;
-    const note      = document.getElementById('inv-note')?.value.trim();
+    const note      = document.getElementById('inv-note')?.value?.trim() || '';
     const mode      = document.getElementById('inv-pack-mode')?.value;
 
     if (!date || !type || !unitId || !productId) {
-      SSIApp.toast('Please fill all required fields', 'error'); return;
+      SSIApp.toast('Please fill all required fields (Date, Type, Unit, Product)', 'error');
+      return;
+    }
+    if (!mode) {
+      SSIApp.toast('Please select a Pack Type', 'error');
+      return;
     }
 
-    // Calculate qty
-    calcTotal();
-    const qtyText = document.getElementById('inv-total-qty')?.textContent || '0';
-    const qty = parseFloat(qtyText.replace(/,/g,'')) || 0;
-    if (qty <= 0) { SSIApp.toast('Quantity must be greater than 0', 'error'); return; }
+    // Recalculate qty directly from inputs — do NOT rely on display text
+    const qty = _getQty();
+
+    if (qty <= 0) {
+      SSIApp.toast('Quantity must be greater than 0. Please check Bag Size, Count, or KG fields.', 'error');
+      // Highlight the total box red
+      calcTotal();
+      return;
+    }
 
     // Check OUT doesn't exceed stock
     if (['OUT','TRANSFER_OUT'].includes(type)) {
       const current = SSIApp.getStock(productId, unitId);
       if (qty > current) {
-        SSIApp.toast(`Insufficient stock! Current: ${SSIApp.qtyFmt(current)} KG`, 'error'); return;
+        SSIApp.toast(`Insufficient stock! Current: ${SSIApp.qtyFmt(current)} KG`, 'error');
+        return;
       }
     }
 
@@ -453,8 +515,8 @@ const SSIInventory = (() => {
     };
 
     st.inventory.push(entry);
-    SSIApp.saveState(st);
-    SSIApp.toast(`Entry saved: ${SSIApp.qtyFmt(qty)} ${prod?.uom||'KG'} ✅`);
+    await SSIApp.saveState(st);
+    SSIApp.toast(`✅ Entry saved: ${SSIApp.qtyFmt(qty)} ${prod?.uom||'KG'} added`);
     SSIApp.audit('INV_ENTRY', `${type} ${qty} ${prod?.name}`);
     SSIApp.closeModal();
     refresh(document.getElementById('page-area'));
@@ -465,7 +527,7 @@ const SSIInventory = (() => {
     if (!ok) return;
     const st = SSIApp.getState();
     st.inventory = st.inventory.filter(t => t.id !== id);
-    SSIApp.saveState(st);
+    await SSIApp.saveState(st);
     SSIApp.toast('Entry deleted');
     SSIApp.audit('INV_DELETE', id);
     refresh(document.getElementById('page-area'));
@@ -488,18 +550,19 @@ const SSIInventory = (() => {
     SSIApp.toast('Inventory exported ✅');
   }
 
-  // ── Import Excel (bulk inventory entries) ───────────────────
   function downloadTemplate() {
     const st = SSIApp.getState();
-    const unitNames = st.units.filter(u=>u.active).map(u=>u.name).join(' / ');
-    const productNames = st.products.filter(p=>p.active).slice(0,3).map(p=>p.name).join(' / ');
+    const unitName1 = st.units.filter(u=>u.active)[0]?.name || 'Modinagar';
+    const unitName2 = st.units.filter(u=>u.active)[1]?.name || unitName1;
+    const prodName1 = st.products.filter(p=>p.active)[0]?.name || 'Product Name';
+    const prodName2 = st.products.filter(p=>p.active)[1]?.name || prodName1;
     SSIApp.excelDownload([
       ['Date (YYYY-MM-DD)','Entry Type','Unit Name','Product Name','Pack Mode','Bag/Carton Size (KG)','Count (Bags/Cartons)','Direct Qty (KG or NOS)','Note / Bill No'],
-      ['2026-03-26','IN',unitNames.split('/')[0].trim(), productNames.split('/')[0]?.trim()||'Product Name','BAG','50','30','','Bill No. 1234'],
-      ['2026-03-26','IN',unitNames.split('/')[0].trim(), productNames.split('/')[0]?.trim()||'Product Name','DIRECT_KG','','','1500','Opening stock'],
-      ['2026-03-26','OPENING',unitNames.split('/')[1]?.trim()||unitNames.split('/')[0].trim(), productNames.split('/')[1]?.trim()||'Product Name','BAG','30','20','','Opening balance'],
+      ['2026-03-29','OPENING', unitName1, prodName1,'BAG','50','30','','Opening balance'],
+      ['2026-03-29','IN',      unitName1, prodName1,'DIRECT_KG','','','1500','Bill No. 1234'],
+      ['2026-03-29','IN',      unitName2, prodName2,'BAG','30','20','','Stock IN'],
     ], 'Inventory', 'SSI_Inventory_Template');
-    SSIApp.toast('Template downloaded ✅  — Entry Types: IN / OUT / OPENING / ADJUST / TRANSFER_IN / TRANSFER_OUT | Pack Modes: BAG / CARTON_STD / CARTON_MAN / DIRECT_KG / NOS', 'info');
+    SSIApp.toast('Template downloaded ✅  — Entry Types: IN/OUT/OPENING/ADJUST/TRANSFER_IN/TRANSFER_OUT | Pack Modes: BAG/CARTON_STD/CARTON_MAN/DIRECT_KG/NOS', 'info');
   }
 
   async function importExcel(input) {
@@ -522,60 +585,42 @@ const SSIInventory = (() => {
         const note      = (r['Note / Bill No'] || '').toString().trim();
 
         if (!dateRaw || !typeRaw || !unitName || !prodName) {
-          errors.push(`Row ${idx+2}: Missing required fields`);
-          return;
+          errors.push(`Row ${idx+2}: Missing required fields`); return;
         }
-
         const unit = st.units.find(u => u.name.toLowerCase() === unitName.toLowerCase() && u.active);
         if (!unit) { errors.push(`Row ${idx+2}: Unit "${unitName}" not found`); return; }
-
         const prod = st.products.find(p => p.name.toLowerCase() === prodName.toLowerCase() && p.active);
         if (!prod) { errors.push(`Row ${idx+2}: Product "${prodName}" not found`); return; }
-
         const validTypes = ['IN','OUT','OPENING','ADJUST','TRANSFER_IN','TRANSFER_OUT'];
         if (!validTypes.includes(typeRaw)) { errors.push(`Row ${idx+2}: Invalid type "${typeRaw}"`); return; }
 
-        // Calculate qty
-        let qty = 0;
-        let pack_desc = '';
+        let qty = 0, pack_desc = '';
         if (packMode === 'BAG') {
-          qty = bagSize * count;
-          pack_desc = `Bags: ${bagSize} KG × ${count}`;
+          qty = bagSize * count; pack_desc = `Bags: ${bagSize} KG × ${count}`;
         } else if (packMode === 'CARTON_STD') {
           const stdKg = prod.carton_std || bagSize;
-          qty = stdKg * count;
-          pack_desc = `Cartons (Std ${stdKg}KG) × ${count}`;
+          qty = stdKg * count; pack_desc = `Cartons (Std ${stdKg}KG) × ${count}`;
         } else if (packMode === 'CARTON_MAN') {
-          qty = bagSize * count;
-          pack_desc = `Cartons (${bagSize}KG) × ${count}`;
+          qty = bagSize * count; pack_desc = `Cartons (${bagSize}KG) × ${count}`;
         } else {
-          qty = directQty;
-          pack_desc = packMode === 'NOS' ? 'Units/NOS' : 'Direct KG';
+          qty = directQty; pack_desc = packMode === 'NOS' ? 'Units/NOS' : 'Direct KG';
         }
-
-        if (qty <= 0) { errors.push(`Row ${idx+2}: Quantity is 0 — check size/count/direct qty`); return; }
+        if (qty <= 0) { errors.push(`Row ${idx+2}: Qty is 0 — check size/count/direct`); return; }
 
         st.inventory.push({
-          id:         SSIApp.uid(),
-          date:       dateRaw,
-          type:       typeRaw,
-          unit_id:    unit.id,
-          product_id: prod.id,
-          pack_mode:  packMode,
-          pack_desc,
-          qty,
-          note,
-          user_id:    user?.id,
-          user_name:  user?.name,
+          id: SSIApp.uid(), date: dateRaw, type: typeRaw,
+          unit_id: unit.id, product_id: prod.id,
+          pack_mode: packMode, pack_desc, qty, note,
+          user_id: user?.id, user_name: user?.name,
           created_at: new Date().toISOString()
         });
         added++;
       });
 
-      SSIApp.saveState(st);
+      await SSIApp.saveState(st);
       let msg = `✅ ${added} entries imported`;
       if (errors.length) msg += ` | ⚠️ ${errors.length} errors`;
-      SSIApp.toast(msg, errors.length ? 'warn' : 'success');
+      SSIApp.toast(msg, errors.length ? 'warning' : 'success');
       if (errors.length) console.warn('Import errors:', errors);
       SSIApp.audit('INV_IMPORT', `${added} entries`);
       refresh(document.getElementById('page-area'));
@@ -585,5 +630,10 @@ const SSIInventory = (() => {
     input.value = '';
   }
 
-  return { render, refresh, openEntryModal, onProductUnitChange, onPackModeChange, calcTotal, saveEntry, deleteEntry, exportExcel, downloadTemplate, importExcel, applyFilter };
+  return {
+    render, refresh, applyFilter,
+    openEntryModal, onProductUnitChange, onPackModeChange, calcTotal,
+    saveEntry, deleteEntry,
+    exportExcel, downloadTemplate, importExcel
+  };
 })();

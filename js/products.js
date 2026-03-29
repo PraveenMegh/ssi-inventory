@@ -57,8 +57,7 @@ const SSIProducts = (() => {
                   ${unitStocks}
                   <td><span class="badge ${isLowTotal?'badge-low':'badge-ok'}">${isLowTotal?'⚠️ LOW':'✅ OK'}</span></td>
                   ${SSIApp.hasRole('ADMIN')?`<td>
-                    <button class="btn btn-secondary btn-sm" onclick="SSIProducts.openForm('${p.id}')">✏️</button>
-                    <button class="btn btn-danger btn-sm" onclick="SSIProducts.deleteProduct('${p.id}')">🗑️</button>
+                    <button class="btn btn-secondary btn-sm" onclick="SSIProducts.openForm('${p.id}')">✏️ Edit</button>
                   </td>`:''}
                 </tr>`;
               }).join('') || `<tr><td colspan="20" class="empty-state"><div class="icon">📦</div><p>No products yet. Add your first product!</p></td></tr>`}

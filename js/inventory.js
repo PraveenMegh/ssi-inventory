@@ -53,6 +53,7 @@ const SSIInventory = (() => {
           </label>
           <button class="btn btn-secondary btn-sm" onclick="SSIInventory.exportExcel()">📤 Export</button>
           <button class="btn btn-primary" onclick="SSIInventory.openEntryModal()">+ Add Entry</button>
+          ${SSIApp.hasRole('ADMIN') ? `<button class="btn btn-danger btn-sm" onclick="SSIInventory.clearInventory()" title="Reset all inventory to zero" style="background:#ef4444;">🗑️ Reset to Zero</button>` : ''}
         </div>
       </div>
 
@@ -656,10 +657,26 @@ const SSIInventory = (() => {
     input.value = '';
   }
 
+  async function clearInventory() {
+    if (!SSIApp.hasRole('ADMIN')) return;
+    const st = SSIApp.getState();
+    const count = (st.inventory||[]).length;
+    if (count === 0) { SSIApp.toast('Inventory is already empty.', 'info'); return; }
+    const ok = await SSIApp.confirm(
+      `⚠️ RESET INVENTORY TO ZERO?\n\nThis will permanently DELETE all ${count} inventory entries.\nOrders and dispatch records are NOT affected.\n\nThis CANNOT be undone. Continue?`
+    );
+    if (!ok) return;
+    st.inventory = [];
+    SSIApp.saveState(st);
+    SSIApp.audit('INVENTORY_RESET', `All ${count} inventory entries cleared by admin`);
+    SSIApp.toast(`✅ Inventory reset — ${count} entries removed`);
+    refresh(document.getElementById('page-area'));
+  }
+
   return {
     render, refresh, applyFilter,
     openEntryModal, onProductUnitChange, onPackModeChange, calcTotal,
-    saveEntry, deleteEntry,
+    saveEntry, deleteEntry, clearInventory,
     exportExcel, downloadTemplate, importExcel
   };
 })();

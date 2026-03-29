@@ -21,14 +21,17 @@ const SSIOrders = (() => {
     const user = SSIApp.currentUser();
     const isSales = user?.role === 'SALES';
 
-    // Sales: own orders only. Others: all orders
     const orders = isSales
       ? st.orders.filter(o => o.created_by === user.id)
       : [...st.orders];
     orders.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
 
-    const statusBadge = s => {
+    const statusBadge = o => {
+      const s = o.status;
       const map = { DRAFT:'badge-draft', SUBMITTED:'badge-submitted', DISPATCHED:'badge-dispatched', CANCELLED:'badge-cancelled' };
+      if (s === 'DISPATCHED' && o.dispatch_modified) {
+        return `<span class="badge badge-dispatched" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;">✏️ DISPATCHED<br><span style="font-size:10px;">MODIFIED</span></span>`;
+      }
       return `<span class="badge ${map[s]||'badge-draft'}">${s}</span>`;
     };
 
@@ -38,7 +41,6 @@ const SSIOrders = (() => {
         <button class="btn btn-primary" onclick="SSIOrders.openForm()">+ New Order</button>
       </div>
 
-      <!-- Filters (admin/dispatch) -->
       ${!isSales ? `
       <div class="card" style="margin-bottom:16px;padding:16px;">
         <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
@@ -76,7 +78,9 @@ const SSIOrders = (() => {
           <table id="orders-table">
             <thead><tr>
               <th>Order #</th><th>Date</th><th>Client</th><th>Unit</th>
-              <th>Items</th><th>Total KG</th><th>Value</th>
+              <th>Items</th>
+              <th>Ordered KG</th>
+              <th>Ordered Value</th>
               <th style="text-align:center;">Urgent</th><th>Status</th>
               ${!isSales ? '<th>By</th>' : ''}
               <th>Actions</th>
@@ -86,11 +90,13 @@ const SSIOrders = (() => {
                 const client   = st.clients.find(c=>c.id===o.client_id);
                 const unit     = st.units.find(u=>u.id===o.unit_id);
                 const salesp   = st.users.find(u=>u.id===o.created_by);
-                const totalKg  = (o.items||[]).reduce((s,i)=>s+(i.total_qty||0),0);
                 const canEdit  = o.status==='DRAFT' && (SSIApp.hasRole('ADMIN') || o.created_by===user?.id);
                 const canCancel= (o.status==='DRAFT'||o.status==='SUBMITTED') && (SSIApp.hasRole('ADMIN')||o.created_by===user?.id);
                 return `<tr data-status="${o.status}" data-sales="${o.created_by}" data-date="${o.created_at?.slice(0,10)||''}">
-                  <td><strong>${o.order_no}</strong></td>
+                  <td>
+                    <strong>${o.order_no}</strong>
+                    ${o.dispatch_modified ? '<br><span style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 5px;border-radius:3px;">✏️ Modified</span>' : ''}
+                  </td>
                   <td style="white-space:nowrap;">${SSIApp.dateFmt(o.created_at)}</td>
                   <td>
                     <strong>${client?.name||'—'}</strong>
@@ -98,10 +104,16 @@ const SSIOrders = (() => {
                   </td>
                   <td style="font-size:13px;">${unit?.name||'—'}</td>
                   <td style="text-align:center;">${(o.items||[]).length}</td>
-                  <td style="font-weight:600;">${SSIApp.qtyFmt(totalKg)} KG</td>
-                  <td style="font-weight:600;">${SSIApp.moneyFmt(o.total_value, o.currency||'INR')}</td>
+                  <td style="font-weight:600;">
+                    ${SSIApp.qtyFmt(o.total_qty||0)} KG
+                    ${o.dispatch_modified ? `<br><span style="font-size:11px;color:#d97706;">Disp: ${SSIApp.qtyFmt(o.dispatched_qty||0)} KG</span>` : ''}
+                  </td>
+                  <td style="font-weight:600;">
+                    ${SSIApp.moneyFmt(o.total_value, o.currency||'INR')}
+                    ${o.dispatch_modified ? `<br><span style="font-size:11px;color:#d97706;">Disp: ${SSIApp.moneyFmt(o.dispatched_value||0, o.currency||'INR')}</span>` : ''}
+                  </td>
                   <td style="text-align:center;">${o.urgent?'<span class="badge badge-urgent">🚨 YES</span>':'<span style="color:#d1d5db;">—</span>'}</td>
-                  <td>${statusBadge(o.status)}</td>
+                  <td>${statusBadge(o)}</td>
                   ${!isSales ? `<td style="font-size:12px;color:#64748b;">${salesp?.name||'—'}</td>` : ''}
                   <td style="white-space:nowrap;">
                     <button class="btn btn-secondary btn-sm" onclick="SSIOrders.viewOrder('${o.id}')">👁️</button>
@@ -145,7 +157,6 @@ const SSIOrders = (() => {
     const productOpts = st.products.filter(p=>p.active)
       .map(p=>`<option value="${p.id}">${p.name} (${p.uom||'KG'})</option>`).join('');
 
-    // Clients: Sales sees only their assigned clients; Admin sees all
     const myClients = SSIClients.visibleClients(st, user).filter(c => c.active && c.type !== 'Vendor');
     const clientOpts = myClients
       .map(c=>`<option value="${c.id}" ${ord?.client_id===c.id?'selected':''}>${c.name}${c.gst_no?' | '+c.gst_no:''}</option>`).join('');
@@ -159,7 +170,6 @@ const SSIOrders = (() => {
         <button onclick="SSIApp.closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b;">✕</button>
       </div>
       <div class="modal-body">
-        <!-- Header fields -->
         <div class="form-grid form-grid-3" style="margin-bottom:20px;">
           <div>
             <label>Date *</label>
@@ -203,14 +213,12 @@ const SSIOrders = (() => {
           </div>
         </div>
 
-        <!-- Items table -->
         <div style="font-size:15px;font-weight:700;color:#111827;margin-bottom:12px;">📋 Order Items</div>
         <div id="ord-items-container">
           ${items.map((item,idx) => buildItemRow(idx, item, productOpts)).join('')}
         </div>
         <button class="btn btn-secondary btn-sm" style="margin-top:8px;" onclick="SSIOrders.addItemRow()">+ Add Item</button>
 
-        <!-- Grand total -->
         <div style="margin-top:20px;background:#f8fafc;border-radius:10px;padding:16px;display:flex;justify-content:flex-end;gap:40px;">
           <div style="text-align:right;">
             <div style="font-size:13px;color:#64748b;">Total KG / Units</div>
@@ -285,10 +293,8 @@ const SSIOrders = (() => {
     const st   = SSIApp.getState();
     const prod = st.products.find(p=>p.id===productId);
     if (!prod) return;
-    // Auto-fill rate
     const rateEl = document.querySelector(`.item-rate[data-idx="${idx}"]`);
     if (rateEl && !rateEl.value && prod.default_rate) rateEl.value = prod.default_rate;
-    // Auto pack size if only one
     const sizeEl = document.querySelector(`.item-size[data-idx="${idx}"]`);
     if (sizeEl && prod.pack_sizes?.length === 1) {
       const m = (prod.pack_sizes[0]||'').match(/[\d.]+/);
@@ -307,7 +313,6 @@ const SSIOrders = (() => {
     if (sizeWrap) {
       sizeWrap.style.display = (mode==='DIRECT_KG'||mode==='NOS') ? 'none' : '';
     }
-    // If carton_std, auto-fill size from product
     if (mode === 'CARTON_STD') {
       const productId = document.querySelector(`.item-product[data-idx="${idx}"]`)?.value;
       if (productId) {
@@ -327,29 +332,23 @@ const SSIOrders = (() => {
 
     let totalQty = 0, formula = '';
     if (mode === 'BAG') {
-      totalQty = size * count;
-      formula = `${size} KG × ${count} bags = ${SSIApp.qtyFmt(totalQty)} KG`;
+      totalQty = size * count; formula = `${size} KG × ${count} bags = ${SSIApp.qtyFmt(totalQty)} KG`;
     } else if (mode === 'CARTON_STD' || mode === 'CARTON_MAN') {
-      totalQty = size * count;
-      formula = `${size} KG/ctn × ${count} cartons = ${SSIApp.qtyFmt(totalQty)} KG`;
+      totalQty = size * count; formula = `${size} KG/ctn × ${count} cartons = ${SSIApp.qtyFmt(totalQty)} KG`;
     } else if (mode === 'DIRECT_KG') {
-      totalQty = count;
-      formula = `Direct: ${SSIApp.qtyFmt(totalQty)} KG`;
+      totalQty = count; formula = `Direct: ${SSIApp.qtyFmt(totalQty)} KG`;
     } else if (mode === 'NOS') {
-      totalQty = count;
-      formula = `${count} Units/NOS`;
+      totalQty = count; formula = `${count} Units/NOS`;
     }
 
     const lineTotal = totalQty * rate;
     const currency  = document.getElementById('ord-currency')?.value || 'INR';
-
     const qtyEl    = document.getElementById(`item-qty-${idx}`);
     const totalEl  = document.getElementById(`item-line-total-${idx}`);
     const formulaEl= document.getElementById(`item-formula-${idx}`);
     if (qtyEl)     qtyEl.textContent    = SSIApp.qtyFmt(totalQty);
     if (totalEl)   totalEl.textContent  = SSIApp.moneyFmt(lineTotal, currency);
     if (formulaEl) formulaEl.textContent= formula;
-
     recalcGrand();
   }
 
@@ -357,26 +356,21 @@ const SSIOrders = (() => {
     const rows     = document.querySelectorAll('.item-row');
     let grandKg    = 0, grandVal = 0;
     const currency = document.getElementById('ord-currency')?.value || 'INR';
-
     rows.forEach((row, idx) => {
-      const mode   = document.querySelector(`.item-pack-mode[data-idx="${idx}"]`)?.value || 'BAG';
-      const size   = parseFloat(document.querySelector(`.item-size[data-idx="${idx}"]`)?.value) || 0;
-      const count  = parseFloat(document.querySelector(`.item-count[data-idx="${idx}"]`)?.value) || 0;
-      const rate   = parseFloat(document.querySelector(`.item-rate[data-idx="${idx}"]`)?.value) || 0;
-      let qty = 0;
-      if (mode==='DIRECT_KG'||mode==='NOS') qty=count;
-      else qty=size*count;
+      const mode  = document.querySelector(`.item-pack-mode[data-idx="${idx}"]`)?.value || 'BAG';
+      const size  = parseFloat(document.querySelector(`.item-size[data-idx="${idx}"]`)?.value) || 0;
+      const count = parseFloat(document.querySelector(`.item-count[data-idx="${idx}"]`)?.value) || 0;
+      const rate  = parseFloat(document.querySelector(`.item-rate[data-idx="${idx}"]`)?.value) || 0;
+      let qty = (mode==='DIRECT_KG'||mode==='NOS') ? count : size*count;
       grandKg  += qty;
       grandVal += qty*rate;
     });
-
     const kgEl  = document.getElementById('ord-grand-kg');
     const valEl = document.getElementById('ord-grand-total');
     if (kgEl)  kgEl.textContent  = SSIApp.qtyFmt(grandKg) + ' KG';
     if (valEl) valEl.textContent = SSIApp.moneyFmt(grandVal, currency);
   }
 
-  let _itemCount = 0;
   function addItemRow() {
     const container = document.getElementById('ord-items-container');
     if (!container) return;
@@ -397,10 +391,10 @@ const SSIOrders = (() => {
     const btn = document.getElementById('ord-urgent-btn');
     const isUrgent = val.value === '1';
     val.value = isUrgent ? '0' : '1';
-    btn.style.background    = isUrgent ? '#fff' : '#dc2626';
-    btn.style.color         = isUrgent ? '#64748b' : '#fff';
-    btn.style.borderColor   = isUrgent ? '#d1d5db' : '#dc2626';
-    btn.textContent         = isUrgent ? '⬜ URGENT — NO' : '🚨 URGENT — YES';
+    btn.style.background  = isUrgent ? '#fff' : '#dc2626';
+    btn.style.color       = isUrgent ? '#64748b' : '#fff';
+    btn.style.borderColor = isUrgent ? '#d1d5db' : '#dc2626';
+    btn.textContent       = isUrgent ? '⬜ URGENT — NO' : '🚨 URGENT — YES';
   }
 
   function collectItems() {
@@ -409,13 +403,11 @@ const SSIOrders = (() => {
     rows.forEach((row, idx) => {
       const productId = document.querySelector(`.item-product[data-idx="${idx}"]`)?.value;
       if (!productId) return;
-      const mode   = document.querySelector(`.item-pack-mode[data-idx="${idx}"]`)?.value || 'BAG';
-      const size   = parseFloat(document.querySelector(`.item-size[data-idx="${idx}"]`)?.value) || 0;
-      const count  = parseFloat(document.querySelector(`.item-count[data-idx="${idx}"]`)?.value) || 0;
-      const rate   = parseFloat(document.querySelector(`.item-rate[data-idx="${idx}"]`)?.value) || 0;
-      let totalQty = 0;
-      if (mode==='DIRECT_KG'||mode==='NOS') totalQty=count;
-      else totalQty=size*count;
+      const mode  = document.querySelector(`.item-pack-mode[data-idx="${idx}"]`)?.value || 'BAG';
+      const size  = parseFloat(document.querySelector(`.item-size[data-idx="${idx}"]`)?.value) || 0;
+      const count = parseFloat(document.querySelector(`.item-count[data-idx="${idx}"]`)?.value) || 0;
+      const rate  = parseFloat(document.querySelector(`.item-rate[data-idx="${idx}"]`)?.value) || 0;
+      let totalQty = (mode==='DIRECT_KG'||mode==='NOS') ? count : size*count;
       items.push({ product_id:productId, pack_mode:mode, pack_size:size, count, rate, total_qty:totalQty, line_total:totalQty*rate });
     });
     return items;
@@ -470,49 +462,122 @@ const SSIOrders = (() => {
     const client  = st.clients.find(c=>c.id===o.client_id);
     const unit    = st.units.find(u=>u.id===o.unit_id);
     const salesp  = st.users.find(u=>u.id===o.created_by);
+    const dispBy  = o.dispatched_by ? st.users.find(u=>u.id===o.dispatched_by) : null;
     const statusColors = {DRAFT:'#64748b',SUBMITTED:'#d97706',DISPATCHED:'#16a34a',CANCELLED:'#dc2626'};
 
-    const html = `
-      <div class="modal-header">
-        <h3 style="font-size:18px;font-weight:700;">Order Details — ${o.order_no} ${o.urgent?'🚨':''}</h3>
-        <button onclick="SSIApp.closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b;">✕</button>
-      </div>
-      <div class="modal-body">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
-          <div class="info-card"><div style="font-size:12px;color:#64748b;">Client</div><strong>${client?.name||'—'}</strong>${client?.gst_no?`<br><span style="font-size:12px;color:#16a34a;">GST: ${client.gst_no}</span>`:''}</div>
-          <div class="info-card"><div style="font-size:12px;color:#64748b;">Unit</div><strong>${unit?.name||'—'}</strong></div>
-          <div class="info-card"><div style="font-size:12px;color:#64748b;">Date</div><strong>${SSIApp.dateFmt(o.date)}</strong></div>
-          <div class="info-card"><div style="font-size:12px;color:#64748b;">Status</div><span style="color:${statusColors[o.status]};font-weight:700;">${o.status}</span>${o.dispatched_at?`<br><span style="font-size:11px;color:#64748b;">Dispatched: ${SSIApp.dateFmt(o.dispatched_at)}</span>`:''}</div>
-          <div class="info-card"><div style="font-size:12px;color:#64748b;">Salesperson</div><strong>${salesp?.name||'—'}</strong></div>
-          <div class="info-card"><div style="font-size:12px;color:#64748b;">Currency</div><strong>${o.currency||'INR'}</strong></div>
-          ${o.remarks?`<div class="info-card" style="grid-column:span 2;"><div style="font-size:12px;color:#64748b;">Remarks</div><strong>${o.remarks}</strong></div>`:''}
-        </div>
+    // Build original items table
+    const buildItemsTable = (items, currency, title, headerColor) => `
+      <div style="margin-bottom:16px;">
+        <div style="font-size:14px;font-weight:700;color:${headerColor};margin-bottom:8px;">${title}</div>
         <table>
           <thead><tr><th>#</th><th>Product</th><th>Pack</th><th>Size</th><th>Count</th><th style="text-align:right;">Total KG</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Amount</th></tr></thead>
           <tbody>
-            ${(o.items||[]).map((item,i)=>{
+            ${(items||[]).map((item,i)=>{
               const prod = st.products.find(p=>p.id===item.product_id);
+              const qty = item.dispatched_qty !== undefined ? item.dispatched_qty : item.total_qty;
+              const lineAmt = item.dispatched_qty !== undefined ? item.dispatched_line_total : item.line_total;
               return `<tr>
                 <td>${i+1}</td>
                 <td><strong>${prod?.name||'—'}</strong></td>
                 <td style="font-size:12px;">${item.pack_mode||'—'}</td>
                 <td>${item.pack_size>0?item.pack_size+' KG':'—'}</td>
                 <td>${item.count||0}</td>
-                <td style="text-align:right;font-weight:700;">${SSIApp.qtyFmt(item.total_qty||0)}</td>
-                <td style="text-align:right;">${SSIApp.moneyFmt(item.rate||0,o.currency)}</td>
-                <td style="text-align:right;font-weight:700;">${SSIApp.moneyFmt(item.line_total||0,o.currency)}</td>
+                <td style="text-align:right;font-weight:700;">${SSIApp.qtyFmt(qty||0)}</td>
+                <td style="text-align:right;">${SSIApp.moneyFmt(item.rate||0,currency)}</td>
+                <td style="text-align:right;font-weight:700;">${SSIApp.moneyFmt(lineAmt||0,currency)}</td>
               </tr>`;
             }).join('')}
           </tbody>
           <tfoot>
             <tr style="background:#f8fafc;">
               <td colspan="5" style="text-align:right;font-weight:700;">Totals:</td>
-              <td style="text-align:right;font-weight:800;">${SSIApp.qtyFmt(o.total_qty||0)} KG</td>
+              <td style="text-align:right;font-weight:800;">${SSIApp.qtyFmt((items||[]).reduce((s,i)=> s + (i.dispatched_qty !== undefined ? i.dispatched_qty : i.total_qty||0), 0))} KG</td>
               <td></td>
-              <td style="text-align:right;font-weight:800;color:#e11d2e;">${SSIApp.moneyFmt(o.total_value||0,o.currency)}</td>
+              <td style="text-align:right;font-weight:800;color:#e11d2e;">${SSIApp.moneyFmt((items||[]).reduce((s,i)=> s + (i.dispatched_qty !== undefined ? i.dispatched_line_total : i.line_total||0), 0), currency)}</td>
             </tr>
           </tfoot>
         </table>
+      </div>`;
+
+    // Comparison table for modified dispatch
+    const buildComparisonTable = () => {
+      if (!o.dispatch_modified || !o.dispatched_items) return '';
+      return `
+        <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:16px;margin-top:16px;">
+          <div style="font-size:14px;font-weight:700;color:#92400e;margin-bottom:12px;">📊 Original vs Dispatched Comparison</div>
+          <table>
+            <thead><tr>
+              <th>Product</th>
+              <th style="text-align:right;">Ordered KG</th>
+              <th style="text-align:right;">Dispatched KG</th>
+              <th style="text-align:right;">Difference</th>
+              <th style="text-align:right;">Ordered Value</th>
+              <th style="text-align:right;">Dispatched Value</th>
+            </tr></thead>
+            <tbody>
+              ${(o.original_items||[]).map((orig, i) => {
+                const disp = (o.dispatched_items||[])[i] || {};
+                const prod = st.products.find(p=>p.id===orig.product_id);
+                const diff = (disp.dispatched_qty||0) - (orig.total_qty||0);
+                return `<tr>
+                  <td><strong>${prod?.name||'—'}</strong></td>
+                  <td style="text-align:right;">${SSIApp.qtyFmt(orig.total_qty||0)}</td>
+                  <td style="text-align:right;font-weight:700;color:${diff<0?'#dc2626':'#16a34a'};">${SSIApp.qtyFmt(disp.dispatched_qty||0)}</td>
+                  <td style="text-align:right;font-weight:700;color:${diff<0?'#dc2626':'#16a34a'};">${diff>=0?'+':''}${SSIApp.qtyFmt(diff)}</td>
+                  <td style="text-align:right;">${SSIApp.moneyFmt(orig.line_total||0,o.currency)}</td>
+                  <td style="text-align:right;font-weight:700;color:${diff<0?'#dc2626':'#16a34a'};">${SSIApp.moneyFmt(disp.dispatched_line_total||0,o.currency)}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+            <tfoot>
+              <tr style="background:#fef3c7;font-weight:800;">
+                <td>TOTAL</td>
+                <td style="text-align:right;">${SSIApp.qtyFmt(o.original_qty||0)} KG</td>
+                <td style="text-align:right;color:${(o.dispatched_qty||0)<(o.original_qty||0)?'#dc2626':'#16a34a'};">${SSIApp.qtyFmt(o.dispatched_qty||0)} KG</td>
+                <td style="text-align:right;color:${(o.dispatched_qty||0)<(o.original_qty||0)?'#dc2626':'#16a34a'};">${(o.dispatched_qty||0)>=(o.original_qty||0)?'+':''}${SSIApp.qtyFmt((o.dispatched_qty||0)-(o.original_qty||0))} KG</td>
+                <td style="text-align:right;">${SSIApp.moneyFmt(o.original_value||0,o.currency)}</td>
+                <td style="text-align:right;color:${(o.dispatched_qty||0)<(o.original_qty||0)?'#dc2626':'#16a34a'};">${SSIApp.moneyFmt(o.dispatched_value||0,o.currency)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>`;
+    };
+
+    const html = `
+      <div class="modal-header">
+        <h3 style="font-size:18px;font-weight:700;">Order Details — ${o.order_no} ${o.urgent?'🚨':''} ${o.dispatch_modified?'<span style="background:#fef3c7;color:#92400e;font-size:13px;padding:2px 8px;border-radius:4px;">✏️ Modified</span>':''}</h3>
+        <button onclick="SSIApp.closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b;">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- Order Meta -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
+          <div class="info-card"><div style="font-size:12px;color:#64748b;">Client</div><strong>${client?.name||'—'}</strong>${client?.gst_no?`<br><span style="font-size:12px;color:#16a34a;">GST: ${client.gst_no}</span>`:''}</div>
+          <div class="info-card"><div style="font-size:12px;color:#64748b;">Unit</div><strong>${unit?.name||'—'}</strong></div>
+          <div class="info-card"><div style="font-size:12px;color:#64748b;">Order Date</div><strong>${SSIApp.dateFmt(o.date)}</strong></div>
+          <div class="info-card"><div style="font-size:12px;color:#64748b;">Status</div>
+            <span style="color:${statusColors[o.status]};font-weight:700;">${o.status}</span>
+            ${o.dispatch_modified ? '<span style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px;border-radius:3px;margin-left:6px;">MODIFIED</span>' : ''}
+            ${o.dispatched_at?`<br><span style="font-size:11px;color:#64748b;">Dispatched: ${SSIApp.dateFmt(o.dispatched_at)} by ${dispBy?.name||'—'}</span>`:''}
+          </div>
+          <div class="info-card"><div style="font-size:12px;color:#64748b;">Salesperson</div><strong>${salesp?.name||'—'}</strong></div>
+          <div class="info-card"><div style="font-size:12px;color:#64748b;">Currency</div><strong>${o.currency||'INR'}</strong></div>
+          ${o.remarks?`<div class="info-card" style="grid-column:span 2;"><div style="font-size:12px;color:#64748b;">Remarks</div><strong>${o.remarks}</strong></div>`:''}
+          ${o.dispatch_note?`<div class="info-card" style="grid-column:span 2;"><div style="font-size:12px;color:#64748b;">Dispatch Note</div><strong>${o.dispatch_note}</strong></div>`:''}
+        </div>
+
+        ${o.dispatch_modified
+          ? `<!-- MODIFIED: Show both original and dispatched -->
+             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+               <div style="background:#fef2f2;border-radius:10px;padding:14px;border:1px solid #fca5a5;">
+                 ${buildItemsTable(o.original_items||o.items, o.currency, '📋 Original Order (as submitted by Sales)', '#991b1b')}
+               </div>
+               <div style="background:#f0fdf4;border-radius:10px;padding:14px;border:1px solid #86efac;">
+                 ${buildItemsTable(o.dispatched_items||o.items, o.currency, '🚚 Actually Dispatched (modified by Dispatch team)', '#166534')}
+               </div>
+             </div>
+             ${buildComparisonTable()}`
+          : buildItemsTable(o.items, o.currency, '📋 Order Items', '#111827')
+        }
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="SSIApp.closeModal()">Close</button>
@@ -535,15 +600,24 @@ const SSIOrders = (() => {
 
   function exportExcel() {
     const st   = SSIApp.getState();
-    const rows = [['Order #','Date','Client','GST No','Unit','Total KG','Value','Currency','Urgent','Status','Salesperson','Remarks']];
+    const rows = [['Order #','Date','Client','GST No','Unit','Ordered KG','Dispatched KG','Ordered Value','Dispatched Value','Currency','Urgent','Status','Modified?','Salesperson','Dispatch Note','Remarks']];
     st.orders.forEach(o => {
       const client = st.clients.find(c=>c.id===o.client_id);
       const unit   = st.units.find(u=>u.id===o.unit_id);
       const salesp = st.users.find(u=>u.id===o.created_by);
       rows.push([
         o.order_no, o.date, client?.name||'', client?.gst_no||'', unit?.name||'',
-        o.total_qty||0, o.total_value||0, o.currency||'INR',
-        o.urgent?'YES':'NO', o.status, salesp?.name||'', o.remarks||''
+        o.total_qty||0,
+        o.dispatch_modified ? (o.dispatched_qty||0) : (o.total_qty||0),
+        o.total_value||0,
+        o.dispatch_modified ? (o.dispatched_value||0) : (o.total_value||0),
+        o.currency||'INR',
+        o.urgent?'YES':'NO',
+        o.status,
+        o.dispatch_modified ? 'YES' : 'NO',
+        salesp?.name||'',
+        o.dispatch_note||'',
+        o.remarks||''
       ]);
     });
     SSIApp.excelDownload(rows, 'Orders', 'SSI_Orders_Export');

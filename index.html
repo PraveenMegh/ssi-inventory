@@ -24,11 +24,11 @@
 
     /* ── Layout ── */
     #login-screen  { min-height:100vh; display:flex; align-items:center; justify-content:center;
-                      background: linear-gradient(135deg, #7b241c 0%, #c0392b 50%, #e74c3c 100%); }
+                      background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #3b82f6 100%); }
     #login-screen.hidden { display:none !important; }
     #app-shell     { display:none; height:100vh; overflow:hidden; }
     #app-shell.visible { display:flex; }
-    #sidebar       { width:240px; background:linear-gradient(180deg,#7b241c,#c0392b); color:#fff; display:flex; flex-direction:column; height:100vh; overflow-y:auto; flex-shrink:0; }
+    #sidebar       { width:240px; background:linear-gradient(180deg,#1e3a8a,#2563eb); color:#fff; display:flex; flex-direction:column; height:100vh; overflow-y:auto; flex-shrink:0; }
     #main-content  { flex:1; display:flex; flex-direction:column; overflow:hidden; }
     #app-area      { flex:1; overflow-y:auto; padding:1.5rem; }
 
@@ -70,7 +70,7 @@
     .page-title {
       font-size: 1.25rem;
       font-weight: 700;
-      color: #922b21;
+      color: #1e40af;
     }
 
     /* ── Table ── */
@@ -79,7 +79,7 @@
       border-collapse: collapse;
       font-size: .875rem;
     }
-    table thead tr { background: #c0392b; }
+    table thead tr { background: #2563eb; }
     table th {
       padding: .6rem 1rem;
       text-align: left;
@@ -113,7 +113,7 @@
     }
     .btn:hover   { opacity: .88; }
     .btn:active  { transform: scale(.97); }
-    .btn-primary   { background: #c0392b; color: #fff; }
+    .btn-primary   { background: #2563eb; color: #fff; }
     .btn-secondary { background: #e2e8f0; color: #374151; }
     .btn-success   { background: #16a34a; color: #fff; }
     .btn-danger    { background: #dc2626; color: #fff; }
@@ -139,7 +139,7 @@
       transition: border-color .15s;
       outline: none;
     }
-    input:focus, select:focus, textarea:focus { border-color: #c0392b; }
+    input:focus, select:focus, textarea:focus { border-color: #2563eb; }
     .form-grid   { display: grid; gap: 1rem; }
     .form-grid-2 { grid-template-columns: 1fr 1fr; }
     .form-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
@@ -222,7 +222,7 @@
     /* ── Scrollbar ── */
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: #f1f5f9; }
-    ::-webkit-scrollbar-thumb { background: #f1a8a8; border-radius: 99px; }
+    ::-webkit-scrollbar-thumb { background: #93c5fd; border-radius: 99px; }
 
     /* ── Login page decorative elements ── */
     #login-screen::before {
@@ -254,12 +254,12 @@
 
     /* Login input focus */
     #login-user:focus, #login-pass:focus {
-      border-color: #c0392b !important;
-      box-shadow: 0 0 0 3px rgba(192,57,43,.15);
+      border-color: #2563eb !important;
+      box-shadow: 0 0 0 3px rgba(37,99,235,.15);
     }
 
     /* Login button hover */
-    #login-btn:hover { background: #922b21 !important; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(192,57,43,.4); }
+    #login-btn:hover { background: #1d4ed8 !important; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(37,99,235,.4); }
     #login-btn:active { transform: translateY(0); }
     #login-btn { transition: all .2s ease; }
   </style>
@@ -280,7 +280,7 @@
     </div>
 
     <!-- Brand name -->
-    <h1 style="font-size:1.45rem;font-weight:800;color:#922b21;letter-spacing:-.01em;line-height:1.2;">Shree Sai Industries</h1>
+    <h1 style="font-size:1.45rem;font-weight:800;color:#1e40af;letter-spacing:-.01em;line-height:1.2;">Shree Sai Industries</h1>
     <p style="color:#94a3b8;font-size:.8rem;margin:.3rem 0 .5rem;letter-spacing:.05em;text-transform:uppercase;font-weight:600;">Finest in Quality</p>
 
     <!-- Divider -->
@@ -317,7 +317,7 @@
 
     <!-- Login button -->
     <button id="login-btn" onclick="SSIAuth.login()"
-            style="width:100%;background:#c0392b;color:#fff;border:none;border-radius:.7rem;padding:.9rem;font-size:1rem;font-weight:700;cursor:pointer;letter-spacing:.02em;">
+            style="width:100%;background:#2563eb;color:#fff;border:none;border-radius:.7rem;padding:.9rem;font-size:1rem;font-weight:700;cursor:pointer;letter-spacing:.02em;">
       🔑 &nbsp;Sign In
     </button>
 
@@ -359,11 +359,11 @@
         <button onclick="document.getElementById('sidebar').classList.toggle('open')"
                 style="display:none;background:none;border:none;font-size:1.3rem;cursor:pointer;color:#64748b;"
                 class="md:block" id="hamburger">☰</button>
-        <span id="page-title" style="font-weight:700;color:#922b21;font-size:.95rem;"></span>
+        <span id="page-title" style="font-weight:700;color:#1e40af;font-size:.95rem;"></span>
       </div>
       <div style="display:flex;align-items:center;gap:.6rem;">
         <span id="top-user-name" style="font-size:.85rem;font-weight:600;color:#374151;"></span>
-        <span id="top-user-role" style="background:#fee2e2;color:#c0392b;font-size:.7rem;padding:.2rem .65rem;border-radius:999px;font-weight:700;"></span>
+        <span id="top-user-role" style="background:#dbeafe;color:#2563eb;font-size:.7rem;padding:.2rem .65rem;border-radius:999px;font-weight:700;"></span>
       </div>
     </div>
 

@@ -184,6 +184,10 @@ const SSIEmployees = (() => {
               <input id="ef-phone" value="${emp?.phone||''}" placeholder="Mobile number">
             </div>
             <div>
+              <label>Father / Husband / Wife Name</label>
+              <input id="ef-relation" value="${emp?.relation_name||''}" placeholder="Relation's full name">
+            </div>
+            <div>
               <label>Monthly Salary (₹) *</label>
               <input type="number" id="ef-salary" value="${emp?.monthly_salary||''}" placeholder="e.g. 15000" min="0">
             </div>
@@ -241,6 +245,7 @@ const SSIEmployees = (() => {
       designation:    document.getElementById('ef-desig')?.value.trim()||'',
       join_date:      document.getElementById('ef-join')?.value||'',
       phone:          document.getElementById('ef-phone')?.value.trim()||'',
+      relation_name:  document.getElementById('ef-relation')?.value.trim()||'',
       monthly_salary: salary,
       bank_ac:        document.getElementById('ef-bank-ac')?.value.trim()||'',
       bank_ifsc:      document.getElementById('ef-bank-ifsc')?.value.trim()||'',
@@ -280,9 +285,9 @@ const SSIEmployees = (() => {
   /* ── Template download ───────────────────────────────────── */
   function downloadTemplate() {
     const rows = [
-      ['emp_code','name','type','unit_name','department','designation','join_date','phone','monthly_salary','bank_ac','bank_ifsc','bank_name','notes'],
-      ['EMP-001','Ramesh Kumar','WORKER','Modinagar','Production','Machine Operator','2024-01-01','9876543210','12000','','','',''],
-      ['EMP-002','Suresh Sharma','STAFF','Modinagar','Admin','Supervisor','2024-01-01','9876543211','25000','123456789','SBIN0001234','SBI',''],
+      ['emp_code','name','type','unit_name','department','designation','join_date','phone','relation_name','monthly_salary','bank_ac','bank_ifsc','bank_name','notes'],
+      ['EMP-001','Ramesh Kumar','WORKER','Modinagar','Production','Machine Operator','2024-01-01','9876543210','Ram Kumar (Father)','12000','','','',''],
+      ['EMP-002','Suresh Sharma','STAFF','Modinagar','Admin','Supervisor','2024-01-01','9876543211','Geeta Sharma (Wife)','25000','123456789','SBIN0001234','SBI',''],
     ];
     SSIApp.excelDownload(rows, 'Employees_Template', 'SSI_Employee_Import_Template');
   }
@@ -316,7 +321,8 @@ const SSIEmployees = (() => {
         dept:    header.indexOf('department'),
         desig:   header.indexOf('designation'),
         join:    header.indexOf('join_date'),
-        phone:   header.indexOf('phone'),
+        phone:    header.indexOf('phone'),
+        relation: header.indexOf('relation_name'),
         salary:  header.indexOf('monthly_salary'),
         bankAc:  header.indexOf('bank_ac'),
         bankIfsc:header.indexOf('bank_ifsc'),
@@ -356,6 +362,7 @@ const SSIEmployees = (() => {
           designation:    String(r[idx.desig]||'').trim(),
           join_date:      String(r[idx.join]||'').trim(),
           phone:          String(r[idx.phone]||'').trim(),
+          relation_name:  idx.relation>=0 ? String(r[idx.relation]||'').trim() : '',
           monthly_salary: parseFloat(r[idx.salary])||0,
           bank_ac:        String(r[idx.bankAc]||'').trim(),
           bank_ifsc:      String(r[idx.bankIfsc]||'').trim(),
@@ -383,14 +390,14 @@ const SSIEmployees = (() => {
   function exportExcel() {
     const st = SSIApp.getState();
     const isAdmin = SSIApp.hasRole('ADMIN');
-    const headers = ['Code','Name','Type','Unit','Department','Designation','Join Date','Phone','Status',
+    const headers = ['Code','Name','Type','Unit','Department','Designation','Join Date','Phone','Father/Spouse Name','Status',
       ...(isAdmin ? ['Monthly Salary','Bank AC','Bank IFSC','Bank Name'] : [])];
     const rows = [headers];
     (st.employees||[]).forEach(e => {
       const unit = (st.units||[]).find(u=>u.id===e.unit_id);
       rows.push([
         e.emp_code, e.name, e.type, unit?.name||'', e.department, e.designation,
-        e.join_date, e.phone, e.active!==false?'Active':'Inactive',
+        e.join_date, e.phone, e.relation_name||'', e.active!==false?'Active':'Inactive',
         ...(isAdmin ? [e.monthly_salary, e.bank_ac, e.bank_ifsc, e.bank_name] : [])
       ]);
     });

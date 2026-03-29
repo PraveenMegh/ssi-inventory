@@ -27,7 +27,21 @@ const SSIInventory = (() => {
 
   function refresh(area) {
     const st = SSIApp.getState();
-    const ledger = [...st.inventory].sort((a,b) => new Date(b.date) - new Date(a.date));
+    // Sort ascending for running balance calculation, then reverse for display (newest first)
+    const ledgerAsc = [...st.inventory].sort((a,b) => {
+      const d = new Date(a.date) - new Date(b.date);
+      return d !== 0 ? d : (a.created_at||'').localeCompare(b.created_at||'');
+    });
+    // Pre-compute running balance per (unit_id, product_id) pair — chronological order
+    const balanceMap = {};  // key: `${unit_id}|${product_id}` → running total after each entry (by entry id)
+    ledgerAsc.forEach(t => {
+      const key = `${t.unit_id}|${t.product_id}`;
+      if (!balanceMap[key]) balanceMap[key] = 0;
+      const isOut = ['OUT','TRANSFER_OUT'].includes(t.type);
+      balanceMap[key] += isOut ? -(t.qty||0) : (t.qty||0);
+      t._runningBal = balanceMap[key];  // attach to entry object (temp)
+    });
+    const ledger = [...ledgerAsc].reverse();  // newest first for display
 
     area.innerHTML = `
       <div class="page-header">
@@ -83,6 +97,7 @@ const SSIInventory = (() => {
             <thead><tr>
               <th>Date</th><th>Type</th><th>Unit</th><th>Product</th>
               <th>Pack Mode</th><th style="text-align:right;">Qty (KG/NOS)</th>
+              <th style="text-align:right;">Closing Balance</th>
               <th>Bill / Note</th><th>By</th>
               ${SSIApp.hasRole('ADMIN') ? '<th>Del</th>' : ''}
             </tr></thead>
@@ -96,16 +111,22 @@ const SSIInventory = (() => {
   }
 
   function renderRows(ledger, st) {
-    if (!ledger.length) return `<tr><td colspan="9" style="text-align:center;padding:40px;color:#94a3b8;">No inventory entries yet. Add your first entry!</td></tr>`;
-    const typeColors = {IN:'#dcfce7',OUT:'#fee2e2',OPENING:'#dbeafe',ADJUST:'#fef3c7',TRANSFER_OUT:'#fce7f3',TRANSFER_IN:'#ede9fe'};
+    if (!ledger.length) return `<tr><td colspan="10" style="text-align:center;padding:40px;color:#94a3b8;">No inventory entries yet. Add your first entry!</td></tr>`;
+    const typeColors     = {IN:'#dcfce7',OUT:'#fee2e2',OPENING:'#dbeafe',ADJUST:'#fef3c7',TRANSFER_OUT:'#fce7f3',TRANSFER_IN:'#ede9fe'};
     const typeTextColors = {IN:'#166534',OUT:'#991b1b',OPENING:'#1e40af',ADJUST:'#92400e',TRANSFER_OUT:'#9d174d',TRANSFER_IN:'#5b21b6'};
     return ledger.map(t => {
-      const prod = st.products.find(p=>p.id===t.product_id);
-      const unit = st.units.find(u=>u.id===t.unit_id);
-      const user = st.users.find(u=>u.id===t.user_id);
-      const bg = typeColors[t.type] || '#f1f5f9';
-      const tc = typeTextColors[t.type] || '#374151';
-      const isOut = ['OUT','TRANSFER_OUT'].includes(t.type);
+      const prod   = st.products.find(p=>p.id===t.product_id);
+      const unit   = st.units.find(u=>u.id===t.unit_id);
+      const user   = st.users.find(u=>u.id===t.user_id);
+      const bg     = typeColors[t.type]     || '#f1f5f9';
+      const tc     = typeTextColors[t.type] || '#374151';
+      const isOut  = ['OUT','TRANSFER_OUT'].includes(t.type);
+      const bal    = t._runningBal ?? 0;
+      const balNeg = bal < 0;
+      // Closing balance cell styling
+      const balBg  = balNeg ? '#fee2e2' : (bal === 0 ? '#f1f5f9' : '#f0fdf4');
+      const balClr = balNeg ? '#dc2626' : (bal === 0 ? '#94a3b8' : '#15803d');
+      const balIcon= balNeg ? '⚠️ ' : '';
       return `<tr data-unit="${t.unit_id}" data-product="${t.product_id}" data-type="${t.type}" data-date="${t.date}">
         <td style="white-space:nowrap;">${SSIApp.dateFmt(t.date)}</td>
         <td><span style="background:${bg};color:${tc};padding:3px 8px;border-radius:6px;font-size:12px;font-weight:600;">${t.type}</span></td>
@@ -113,6 +134,11 @@ const SSIInventory = (() => {
         <td><strong>${prod?.name||'—'}</strong><br><span style="font-size:11px;color:#94a3b8;">${prod?.sku||''}</span></td>
         <td style="font-size:12px;color:#64748b;">${t.pack_desc||'—'}</td>
         <td style="text-align:right;font-weight:700;color:${isOut?'#dc2626':'#16a34a'};">${isOut?'-':'+'} ${SSIApp.qtyFmt(t.qty)} ${prod?.uom||'KG'}</td>
+        <td style="text-align:right;">
+          <span style="display:inline-block;background:${balBg};color:${balClr};padding:3px 10px;border-radius:8px;font-size:13px;font-weight:700;white-space:nowrap;">
+            ${balIcon}${SSIApp.qtyFmt(Math.abs(bal))} ${prod?.uom||'KG'}
+          </span>
+        </td>
         <td style="font-size:12px;color:#64748b;max-width:150px;">${t.note||'—'}</td>
         <td style="font-size:12px;color:#94a3b8;">${user?.name||t.user_name||'—'}</td>
         ${SSIApp.hasRole('ADMIN') ? `<td><button class="btn btn-danger btn-sm" onclick="SSIInventory.deleteEntry('${t.id}')">🗑️</button></td>` : ''}

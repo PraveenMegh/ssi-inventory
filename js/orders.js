@@ -745,19 +745,46 @@ const SSIOrders = (() => {
     refresh(document.getElementById('page-area'));
   }
 
-  // ── Permanently delete an order (ADMIN only) ────────────────────────────
+  // ── Permanently delete an order + reverse its inventory OUT entries (ADMIN only) ──
   async function deleteOrder(orderId) {
-    const st  = SSIApp.getState();
-    const o   = st.orders.find(x=>x.id===orderId);
+    const st = SSIApp.getState();
+    const o  = st.orders.find(x=>x.id===orderId);
     if (!o) return;
-    const ok  = await SSIApp.confirm(
-      `Permanently DELETE order ${o.order_no}?\n\nThis cannot be undone. Inventory transactions from this order will NOT be reversed.`
+
+    // Find inventory entries linked to this order:
+    //   1. Future dispatches: matched by order_id field (set by updated dispatch.js)
+    //   2. Existing dispatches: matched by pack_desc containing the order number
+    const linkedEntries = (st.inventory||[]).filter(t =>
+      t.order_id === orderId ||
+      (t.type === 'OUT' && t.pack_desc && t.pack_desc.includes(`Dispatch: ${o.order_no}`))
+    );
+
+    const invCount = linkedEntries.length;
+    const invMsg   = invCount > 0
+      ? `\n\n⚠️ ${invCount} inventory OUT transaction(s) for this dispatch will be REVERSED (stock restored).`
+      : '';
+
+    const ok = await SSIApp.confirm(
+      `Permanently DELETE order ${o.order_no}?\n\nThis cannot be undone.${invMsg}`
     );
     if (!ok) return;
+
+    // Reverse inventory: remove the linked OUT entries
+    if (invCount > 0) {
+      const toRemove = new Set(linkedEntries.map(t=>t.id));
+      st.inventory = st.inventory.filter(t => !toRemove.has(t.id));
+    }
+
+    // Remove the order itself
     st.orders = st.orders.filter(x=>x.id!==orderId);
+
     SSIApp.saveState(st);
-    SSIApp.toast(`Order ${o.order_no} deleted ✅`);
-    SSIApp.audit('ORDER_DELETE', `${o.order_no} deleted by admin`);
+
+    const msg = invCount > 0
+      ? `Order ${o.order_no} deleted — stock restored (${invCount} transaction${invCount>1?'s':''} reversed) ✅`
+      : `Order ${o.order_no} deleted ✅`;
+    SSIApp.toast(msg);
+    SSIApp.audit('ORDER_DELETE', `${o.order_no} deleted by admin — ${invCount} inv entries reversed`);
     refresh(document.getElementById('page-area'));
   }
 

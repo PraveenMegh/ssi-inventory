@@ -330,6 +330,8 @@ const SSIDispatch = (() => {
         pack_desc: `Dispatch: ${o.order_no}`,
         qty: item.dispatched_qty,
         note: `Order ${o.order_no} dispatch${isModified?' (Modified)':''}${note?' — '+note:''}`,
+        order_id: orderId,        // ← links entry back to the order for reversal on delete
+        order_no: o.order_no,     // ← redundant but useful for display/debug
         user_id: user?.id,
         user_name: user?.name,
         created_at: now

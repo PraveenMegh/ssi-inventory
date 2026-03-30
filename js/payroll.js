@@ -148,7 +148,7 @@ const SSIPayroll = (() => {
     const summaryEl = document.getElementById('pr-summary');
     if (summaryEl) summaryEl.innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;">
-        <div style="background:#dbeafe;padding:14px 16px;border-radius:10px;"><div style="font-size:22px;font-weight:800;color:#1e40af;">${list.length}</div><div style="font-size:12px;color:#1e40af;">Records</div></div>
+        <div style="background:#FDECEA;padding:14px 16px;border-radius:10px;"><div style="font-size:22px;font-weight:800;color:#922B21;">${list.length}</div><div style="font-size:12px;color:#922B21;">Records</div></div>
         <div style="background:#dcfce7;padding:14px 16px;border-radius:10px;"><div style="font-size:22px;font-weight:800;color:#166534;">₹${_fmt(totalGross)}</div><div style="font-size:12px;color:#166534;">Gross Pay</div></div>
         <div style="background:#fef3c7;padding:14px 16px;border-radius:10px;"><div style="font-size:22px;font-weight:800;color:#92400e;">₹${_fmt(totalOT)}</div><div style="font-size:12px;color:#92400e;">OT Amount</div></div>
         <div style="background:#fee2e2;padding:14px 16px;border-radius:10px;"><div style="font-size:22px;font-weight:800;color:#991b1b;">₹${_fmt(totalDeduct)}</div><div style="font-size:12px;color:#991b1b;">Deductions</div></div>
@@ -167,7 +167,7 @@ const SSIPayroll = (() => {
       return `<tr>
         <td style="white-space:nowrap;">${_fmtPeriod(p.period)}</td>
         <td><b>${emp?.name||'?'}</b><br><span style="font-size:11px;color:#64748b;">${emp?.emp_code||''}</span></td>
-        <td><span style="background:${emp?.type==='STAFF'?'#dbeafe':'#dcfce7'};color:${emp?.type==='STAFF'?'#1e40af':'#166534'};padding:2px 7px;border-radius:10px;font-size:11px;">${emp?.type||''}</span></td>
+        <td><span style="background:${emp?.type==='STAFF'?'#FDECEA':'#dcfce7'};color:${emp?.type==='STAFF'?'#922B21':'#166534'};padding:2px 7px;border-radius:10px;font-size:11px;">${emp?.type||''}</span></td>
         <td>${unit?.name||'—'}</td>
         <td style="text-align:right;">₹${_fmt(p.monthly_salary)}</td>
         <td style="text-align:center;">${p.present_days}</td>
@@ -403,9 +403,9 @@ const SSIPayroll = (() => {
           <input id="edit-remarks" value="${rec.remarks||''}" placeholder="Any note…">
         </div>
       </div>
-      <div style="background:#dbeafe;border-radius:8px;padding:12px;margin-top:14px;text-align:center;">
+      <div style="background:#FDECEA;border-radius:8px;padding:12px;margin-top:14px;text-align:center;">
         <span style="font-size:13px;">Revised Net Pay: </span>
-        <span id="edit-net-preview" data-gross="${rec.gross_pay}" style="font-size:20px;font-weight:800;color:#1e40af;">₹${_fmt(rec.net_pay||rec.gross_pay)}</span>
+        <span id="edit-net-preview" data-gross="${rec.gross_pay}" style="font-size:20px;font-weight:800;color:#922B21;">₹${_fmt(rec.net_pay||rec.gross_pay)}</span>
       </div>
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
         <button class="btn btn-secondary" onclick="SSIApp.closeModal()">Cancel</button>
@@ -479,14 +479,14 @@ const SSIPayroll = (() => {
     const slip = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Salary Slip</title>
     <style>
       body{font-family:Arial,sans-serif;font-size:13px;color:#111;max-width:700px;margin:20px auto;}
-      h2{text-align:center;margin-bottom:4px;color:#1e40af;}
+      h2{text-align:center;margin-bottom:4px;color:#922B21;}
       .sub{text-align:center;color:#64748b;margin-bottom:16px;font-size:12px;}
       table{width:100%;border-collapse:collapse;margin-bottom:12px;}
       td,th{padding:7px 10px;border:1px solid #e2e8f0;font-size:13px;}
-      th{background:#dbeafe;color:#1e40af;font-weight:700;}
+      th{background:#FDECEA;color:#922B21;font-weight:700;}
       .row-label{background:#f8fafc;font-weight:600;width:50%;}
-      .total{background:#1e40af;color:#fff;font-size:15px;font-weight:800;}
-      .footer{border-top:2px solid #1e40af;margin-top:24px;padding-top:12px;font-size:11px;color:#64748b;display:flex;justify-content:space-between;}
+      .total{background:#8B1A1A;color:#fff;font-size:15px;font-weight:800;}
+      .footer{border-top:2px solid #8B1A1A;margin-top:24px;padding-top:12px;font-size:11px;color:#64748b;display:flex;justify-content:space-between;}
       @media print{body{margin:0;}}
     </style></head><body>
     <h2>SSI Group — Salary Slip</h2>

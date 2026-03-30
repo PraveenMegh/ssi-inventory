@@ -56,8 +56,9 @@ const SSIProducts = (() => {
                   <td style="font-size:13px;">${p.reorder_level||'—'}</td>
                   ${unitStocks}
                   <td><span class="badge ${isLowTotal?'badge-low':'badge-ok'}">${isLowTotal?'⚠️ LOW':'✅ OK'}</span></td>
-                  ${SSIApp.hasRole('ADMIN')?`<td>
-                    <button class="btn btn-secondary btn-sm" onclick="SSIProducts.openForm('${p.id}')">✏️ Edit</button>
+                  ${SSIApp.hasRole('ADMIN')?`<td style="white-space:nowrap;">
+                    <button class="btn btn-secondary btn-sm" onclick="SSIProducts.openForm('${p.id}')" title="Edit product">✏️ Edit</button>
+                    <button class="btn btn-danger btn-sm" onclick="SSIProducts.deleteProduct('${p.id}')" title="Delete product">🗑️</button>
                   </td>`:''}
                 </tr>`;
               }).join('') || `<tr><td colspan="20" class="empty-state"><div class="icon">📦</div><p>No products yet. Add your first product!</p></td></tr>`}
@@ -152,11 +153,24 @@ const SSIProducts = (() => {
   }
 
   async function deleteProduct(id) {
-    const ok = await SSIApp.confirm('Delete this product? This cannot be undone.');
+    const st  = SSIApp.getState();
+    const p   = st.products.find(x => x.id === id);
+    if (!p) return;
+    // Warn if product is referenced in orders
+    const usedInOrders = (st.orders||[]).some(o => (o.items||[]).some(i => i.product_id === id));
+    const usedInInv    = (st.inventory||[]).some(i => i.product_id === id);
+    let warning = '';
+    if (usedInOrders) warning += '\n⚠️ This product is used in existing ORDERS.';
+    if (usedInInv)    warning += '\n⚠️ This product has INVENTORY entries.';
+    const msg = `Permanently delete product "${p.name}" (${p.sku})?${warning}\n\nThis cannot be undone.`;
+    const ok = await SSIApp.confirm(msg);
     if (!ok) return;
-    const st = SSIApp.getState();
-    const p = st.products.find(x=>x.id===id);
-    if (p) { p.active=false; SSIApp.saveState(st); SSIApp.toast('Product deleted'); SSIApp.audit('PRODUCT_DELETE',p.name); refresh(document.getElementById('page-area')); }
+    // Hard delete — remove from products array
+    st.products = (st.products || []).filter(x => x.id !== id);
+    SSIApp.saveState(st);
+    SSIApp.toast('🗑️ Product deleted');
+    SSIApp.audit('PRODUCT_DELETE', `Deleted: ${p.sku} – ${p.name}`);
+    refresh(document.getElementById('page-area'));
   }
 
   function downloadTemplate() {

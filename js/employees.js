@@ -107,7 +107,7 @@ const SSIEmployees = (() => {
       return `<tr>
         <td><code style="font-size:12px;">${e.emp_code||'—'}</code></td>
         <td><b>${e.name}</b></td>
-        <td><span class="badge" style="background:${e.type==='STAFF'?'#dbeafe':'#dcfce7'};color:${e.type==='STAFF'?'#1e40af':'#166534'};">${e.type==='STAFF'?'👔 Staff':'👷 Worker'}</span></td>
+        <td><span class="badge" style="background:${e.type==='STAFF'?'#FDECEA':'#dcfce7'};color:${e.type==='STAFF'?'#922B21':'#166534'};">${e.type==='STAFF'?'👔 Staff':'👷 Worker'}</span></td>
         <td>${e.department||'—'}</td>
         <td>${e.designation||'—'}</td>
         <td>${unit?.name||'—'}</td>

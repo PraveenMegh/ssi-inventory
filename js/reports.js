@@ -29,7 +29,7 @@ const SSIReports = (() => {
       <div style="display:flex;gap:0;margin-bottom:20px;border-bottom:2px solid #e2e8f0;flex-wrap:wrap;">
         ${tabs.map((t,i)=>
           `<button id="rpt-tab-${t.id}" onclick="SSIReports.showReport('${t.id}')"
-            style="padding:12px 20px;border:none;background:none;font-size:13px;font-weight:${i===0?'700':'600'};color:${i===0?'#2563eb':'#64748b'};border-bottom:3px solid ${i===0?'#2563eb':'transparent'};cursor:pointer;margin-bottom:-2px;white-space:nowrap;">
+            style="padding:12px 20px;border:none;background:none;font-size:13px;font-weight:${i===0?'700':'600'};color:${i===0?'#C0392B':'#64748b'};border-bottom:3px solid ${i===0?'#C0392B':'transparent'};cursor:pointer;margin-bottom:-2px;white-space:nowrap;">
             ${t.label}
           </button>`
         ).join('')}
@@ -46,8 +46,8 @@ const SSIReports = (() => {
       const btn = document.getElementById(`rpt-tab-${t.id}`);
       if (!btn) return;
       const active = t.id === type;
-      btn.style.color          = active ? '#2563eb' : '#64748b';
-      btn.style.borderBottomColor = active ? '#2563eb' : 'transparent';
+      btn.style.color          = active ? '#C0392B' : '#64748b';
+      btn.style.borderBottomColor = active ? '#C0392B' : 'transparent';
       btn.style.fontWeight     = active ? '700' : '600';
     });
 
@@ -187,9 +187,9 @@ const SSIReports = (() => {
     const summaryEl = document.getElementById('rpt-pr-summary');
     if (summaryEl) summaryEl.innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;">
-        <div style="background:#dbeafe;padding:14px;border-radius:10px;">
-          <div style="font-size:22px;font-weight:800;color:#1e40af;">${list.length}</div>
-          <div style="font-size:12px;color:#1e40af;">Records${isAdmin&&list.length?` (${staffCount} Staff · ${workerCount} Workers)`:''}</div>
+        <div style="background:#FDECEA;padding:14px;border-radius:10px;">
+          <div style="font-size:22px;font-weight:800;color:#922B21;">${list.length}</div>
+          <div style="font-size:12px;color:#922B21;">Records${isAdmin&&list.length?` (${staffCount} Staff · ${workerCount} Workers)`:''}</div>
         </div>
         <div style="background:#dcfce7;padding:14px;border-radius:10px;">
           <div style="font-size:20px;font-weight:800;color:#166534;">₹${_fmt(totalGross)}</div>
@@ -229,7 +229,7 @@ const SSIReports = (() => {
             ${top10.map(p => {
               const emp  = (st.employees||[]).find(e=>e.id===p.emp_id);
               const h    = Math.round((p.net_pay/maxNet)*140);
-              const col  = emp?.type==='STAFF' ? '#2563eb' : '#16a34a';
+              const col  = emp?.type==='STAFF' ? '#C0392B' : '#16a34a';
               return `<div style="flex:1;min-width:50px;display:flex;flex-direction:column;align-items:center;gap:4px;">
                 <div style="font-size:10px;color:#64748b;font-weight:600;">₹${_fmtK(p.net_pay)}</div>
                 <div style="width:100%;height:${Math.max(h,4)}px;background:${col};border-radius:4px 4px 0 0;" title="${emp?.name}: ₹${_fmt(p.net_pay)}"></div>
@@ -238,7 +238,7 @@ const SSIReports = (() => {
             }).join('')}
           </div>
           <div style="display:flex;gap:16px;margin-top:10px;font-size:12px;">
-            <span><span style="display:inline-block;width:12px;height:12px;background:#2563eb;border-radius:2px;margin-right:4px;"></span>Staff</span>
+            <span><span style="display:inline-block;width:12px;height:12px;background:#C0392B;border-radius:2px;margin-right:4px;"></span>Staff</span>
             <span><span style="display:inline-block;width:12px;height:12px;background:#16a34a;border-radius:2px;margin-right:4px;"></span>Worker</span>
           </div>
         </div>`;
@@ -261,7 +261,7 @@ const SSIReports = (() => {
       return `<tr>
         <td style="white-space:nowrap;">${_fmtPeriod(p.period)}</td>
         <td><b>${emp?.name||'?'}</b><br><span style="font-size:11px;color:#64748b;">${emp?.emp_code||''}</span></td>
-        <td><span style="background:${emp?.type==='STAFF'?'#dbeafe':'#dcfce7'};color:${emp?.type==='STAFF'?'#1e40af':'#166534'};padding:2px 7px;border-radius:10px;font-size:11px;">${emp?.type||''}</span></td>
+        <td><span style="background:${emp?.type==='STAFF'?'#FDECEA':'#dcfce7'};color:${emp?.type==='STAFF'?'#922B21':'#166534'};padding:2px 7px;border-radius:10px;font-size:11px;">${emp?.type||''}</span></td>
         <td>${unit?.name||'—'}</td>
         <td style="text-align:right;">₹${_fmt(p.monthly_salary)}</td>
         <td style="text-align:center;">${p.present_days}${p.half_days?`<span style="font-size:11px;color:#92400e;"> +${p.half_days}H</span>`:''}</td>
@@ -352,7 +352,7 @@ const SSIReports = (() => {
             const idx = months.indexOf(m.m);
             return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
               <div style="font-size:10px;color:#64748b;font-weight:600;">${m.totalRevenue>0?'₹'+(m.totalRevenue/1000).toFixed(0)+'k':''}</div>
-              <div style="width:100%;height:${Math.max(h,2)}px;background:${idx===curMonth?'#2563eb':'#93c5fd'};border-radius:4px 4px 0 0;transition:height .3s;" title="${m.m}: ₹${m.totalRevenue.toFixed(2)}"></div>
+              <div style="width:100%;height:${Math.max(h,2)}px;background:${idx===curMonth?'#C0392B':'#F1948A'};border-radius:4px 4px 0 0;transition:height .3s;" title="${m.m}: ₹${m.totalRevenue.toFixed(2)}"></div>
               <div style="font-size:10px;color:#64748b;transform:rotate(-30deg);white-space:nowrap;">${m.m}</div>
             </div>`;
           }).join('')}
@@ -443,9 +443,9 @@ const SSIReports = (() => {
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:20px;">
         ${[
-          {icon:'📦',label:'Products Sold',val:sortedProducts.length,color:'#2563eb'},
+          {icon:'📦',label:'Products Sold',val:sortedProducts.length,color:'#C0392B'},
           {icon:'⚖️',label:'Total KG Dispatched',val:SSIApp.qtyFmt(sortedProducts.reduce((s,p)=>s+p.qty,0)),color:'#16a34a'},
-          {icon:'💰',label:'Total Revenue',val:SSIApp.moneyFmt(sortedProducts.reduce((s,p)=>s+p.value,0)),color:'#2563eb'},
+          {icon:'💰',label:'Total Revenue',val:SSIApp.moneyFmt(sortedProducts.reduce((s,p)=>s+p.value,0)),color:'#C0392B'},
           {icon:'👥',label:'Active Clients',val:sortedClients.length,color:'#7c3aed'},
         ].map(c=>`<div class="stat-card">
           <div style="font-size:28px;margin-bottom:8px;">${c.icon}</div>
@@ -465,7 +465,7 @@ const SSIReports = (() => {
                 <span style="font-size:12px;color:#64748b;">${SSIApp.qtyFmt(p.qty)} KG</span>
               </div>
               <div style="height:10px;background:#f1f5f9;border-radius:5px;overflow:hidden;">
-                <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#2563eb,#93c5fd);border-radius:5px;transition:width .5s;"></div>
+                <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#C0392B,#F1948A);border-radius:5px;transition:width .5s;"></div>
               </div>
               <div style="font-size:11px;color:#94a3b8;margin-top:2px;">${p.orders} orders • ${p.clients} clients • ${SSIApp.moneyFmt(p.value)}</div>
             </div>`;
@@ -476,7 +476,7 @@ const SSIReports = (() => {
           <div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:16px;">🌟 Top Clients by Revenue</div>
           ${sortedClients.map((item,i)=>
             `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #f1f5f9;">
-              <div style="width:28px;height:28px;background:${['#fbbf24','#94a3b8','#d97706','#2563eb','#7c3aed'][i]||'#e2e8f0'};color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;">${i+1}</div>
+              <div style="width:28px;height:28px;background:${['#fbbf24','#94a3b8','#d97706','#C0392B','#7c3aed'][i]||'#e2e8f0'};color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;">${i+1}</div>
               <div style="flex:1;">
                 <div style="font-size:13px;font-weight:600;">${item.c.name}</div>
                 ${item.c.gst_no?`<div style="font-size:11px;color:#16a34a;">GST: ${item.c.gst_no}</div>`:''}
@@ -551,7 +551,7 @@ const SSIReports = (() => {
                 return `<tr>
                   <td><code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12px;">${p.sku}</code></td>
                   <td><strong>${p.name}</strong>${p.description?`<br><span style="font-size:12px;color:#94a3b8;">${p.description}</span>`:''}</td>
-                  <td style="text-align:center;"><span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:12px;font-size:12px;">${p.uom||'KG'}</span></td>
+                  <td style="text-align:center;"><span style="background:#FDECEA;color:#922B21;padding:2px 8px;border-radius:12px;font-size:12px;">${p.uom||'KG'}</span></td>
                   ${unitStocks.map(q=>`<td style="text-align:center;font-weight:600;color:${q<=0?'#dc2626':q<=(p.reorder_level||0)?'#d97706':'#16a34a'};">${SSIApp.qtyFmt(q)}</td>`).join('')}
                   <td style="text-align:center;font-weight:800;">${SSIApp.qtyFmt(total)}</td>
                   <td style="text-align:center;color:#64748b;">${p.reorder_level||'—'}</td>
@@ -588,7 +588,7 @@ const SSIReports = (() => {
         ${salesData.map(d=>`
           <div class="card">
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-              <div style="width:44px;height:44px;background:#2563eb;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px;">${d.sp.name[0]}</div>
+              <div style="width:44px;height:44px;background:#C0392B;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px;">${d.sp.name[0]}</div>
               <div>
                 <div style="font-weight:700;">${d.sp.name}</div>
                 <div style="font-size:12px;color:#94a3b8;">@${d.sp.username}</div>
@@ -602,7 +602,7 @@ const SSIReports = (() => {
             </div>
             <div style="margin-top:12px;padding:12px;background:#eff6ff;border-radius:8px;text-align:center;">
               <div style="font-size:11px;color:#64748b;">Revenue Generated</div>
-              <div style="font-size:18px;font-weight:800;color:#2563eb;">${SSIApp.moneyFmt(d.totalRev)}</div>
+              <div style="font-size:18px;font-weight:800;color:#C0392B;">${SSIApp.moneyFmt(d.totalRev)}</div>
               <div style="font-size:12px;color:#64748b;">${SSIApp.qtyFmt(d.totalKg)} KG dispatched</div>
             </div>
           </div>`).join('') || '<p style="color:#94a3b8;">No salespeople found</p>'}

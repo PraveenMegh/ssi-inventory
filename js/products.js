@@ -50,7 +50,7 @@ const SSIProducts = (() => {
                 return `<tr>
                   <td><code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12px;">${p.sku}</code></td>
                   <td><strong>${p.name}</strong>${p.description?`<br><span style="font-size:12px;color:#94a3b8;">${p.description}</span>`:''}</td>
-                  <td><span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:12px;font-size:12px;font-weight:600;">${p.uom||'KG'}</span></td>
+                  <td><span style="background:#FDECEA;color:#922B21;padding:2px 8px;border-radius:12px;font-size:12px;font-weight:600;">${p.uom||'KG'}</span></td>
                   <td style="font-size:12px;color:#64748b;">${packLabels||'—'}</td>
                   <td style="font-size:13px;">${p.carton_std>0?p.carton_std+' KG/ctn/bag':'—'}</td>
                   <td style="font-size:13px;">${p.reorder_level||'—'}</td>

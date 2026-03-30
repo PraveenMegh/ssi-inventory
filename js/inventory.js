@@ -113,8 +113,8 @@ const SSIInventory = (() => {
 
   function renderRows(ledger, st) {
     if (!ledger.length) return `<tr><td colspan="9" style="text-align:center;padding:40px;color:#94a3b8;">No inventory entries yet. Add your first entry!</td></tr>`;
-    const typeColors     = {IN:'#dcfce7',OUT:'#fee2e2',OPENING:'#dbeafe',ADJUST:'#fef3c7',TRANSFER_OUT:'#fce7f3',TRANSFER_IN:'#ede9fe'};
-    const typeTextColors = {IN:'#166534',OUT:'#991b1b',OPENING:'#1e40af',ADJUST:'#92400e',TRANSFER_OUT:'#9d174d',TRANSFER_IN:'#5b21b6'};
+    const typeColors     = {IN:'#dcfce7',OUT:'#fee2e2',OPENING:'#FDECEA',ADJUST:'#fef3c7',TRANSFER_OUT:'#fce7f3',TRANSFER_IN:'#ede9fe'};
+    const typeTextColors = {IN:'#166534',OUT:'#991b1b',OPENING:'#D35400',ADJUST:'#92400e',TRANSFER_OUT:'#9d174d',TRANSFER_IN:'#5b21b6'};
     return ledger.map(t => {
       const prod   = st.products.find(p=>p.id===t.product_id);
       const unit   = st.units.find(u=>u.id===t.unit_id);

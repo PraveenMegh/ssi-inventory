@@ -12,7 +12,7 @@ const SSIUsers = (() => {
 
   const ROLE_COLORS = {
     ADMIN:      { bg:'#fef3c7', color:'#92400e' },
-    STOCK:      { bg:'#dbeafe', color:'#1e40af' },
+    STOCK:      { bg:'#FDECEA', color:'#8B1A1A' },
     DISPATCH:   { bg:'#d1fae5', color:'#065f46' },
     SALES:      { bg:'#ede9fe', color:'#5b21b6' },
     ACCOUNTANT: { bg:'#fce7f3', color:'#9d174d' },

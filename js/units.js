@@ -201,5 +201,21 @@ const SSIUnits = (() => {
     refresh(document.getElementById('page-area'));
   }
 
-  return { render, refresh, getAll, openForm, saveUnit, toggleActive };
+  
+  /* ── Delete unit (ADMIN only) ────────────────────────────── */
+  async function deleteUnit(id) {
+    if (!SSIApp.hasRole('ADMIN')) { SSIApp.toast('🔒 Admin only'); return; }
+    const st   = SSIApp.getState();
+    const unit = (st.units||[]).find(u=>u.id===id);
+    if (!unit) return;
+    const ok = await SSIApp.confirm(`Delete unit/location "${unit.name}"? This cannot be undone. Ensure no employees or inventory entries are linked to this unit.`);
+    if (!ok) return;
+    st.units = (st.units||[]).filter(u=>u.id!==id);
+    await SSIApp.saveState(st);
+    SSIApp.audit('UNIT_DELETE', `Deleted unit: ${unit.name}`);
+    SSIApp.toast('🗑️ Unit deleted');
+    refresh(document.getElementById('page-area'));
+  }
+
+return { render, refresh, getAll, openForm, saveUnit, toggleActive, deleteUnit };
 })();

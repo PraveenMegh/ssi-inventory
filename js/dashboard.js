@@ -55,7 +55,7 @@ const SSIDashboard = (() => {
         <!-- Stats Grid -->
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px;">
           ${statCard('📦', 'Products',     totalProducts,                         'Active products',           '#e11d2e')}
-          ${statCard('👥', 'Clients',      totalClients,                          'Active clients',            '#2563eb')}
+          ${statCard('👥', 'Clients',      totalClients,                          'Active clients',            '#C0392B')}
           ${statCard('🛒', 'Pending',      pendingOrders,                         'Awaiting dispatch',         '#d97706')}
           ${statCard('🚨', 'Urgent',       urgentOrders,                          'Urgent orders',             '#dc2626')}
           ${statCard('🚚', 'Dispatched',   dispatchedThisMonth,                   'This month',                '#16a34a')}

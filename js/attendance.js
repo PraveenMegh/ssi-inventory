@@ -9,7 +9,7 @@ const SSIAttendance = (() => {
     P:  { label:'Present',   short:'P',  bg:'#dcfce7', color:'#166534' },
     A:  { label:'Absent',    short:'A',  bg:'#fee2e2', color:'#991b1b' },
     H:  { label:'Half Day',  short:'H',  bg:'#fef3c7', color:'#92400e' },
-    L:  { label:'Leave',     short:'L',  bg:'#dbeafe', color:'#1e40af' },
+    L:  { label:'Leave',     short:'L',  bg:'#EDE9FE', color:'#6D28D9' },
     WO: { label:'Week Off',  short:'WO', bg:'#f3f4f6', color:'#6b7280' },
     HD: { label:'Holiday',   short:'HD', bg:'#f5f3ff', color:'#5b21b6' },
   };
@@ -132,7 +132,7 @@ const SSIAttendance = (() => {
     const summaryEl = document.getElementById('att-summary');
     if (summaryEl) summaryEl.innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:0;">
-        ${card('👥 Employees', emps.length, '#dbeafe','#1e40af')}
+        ${card('👥 Employees', emps.length, '#FDECEA','#922B21')}
         ${card('✅ Present Days', totalP, '#dcfce7','#166534')}
         ${card('❌ Absent Days', totalA, '#fee2e2','#991b1b')}
         ${card('½ Half Days', totalH, '#fef3c7','#92400e')}
@@ -171,7 +171,7 @@ const SSIAttendance = (() => {
       return `<tr>
         <td style="white-space:nowrap;padding:4px 8px;position:sticky;left:0;background:#fff;z-index:1;border-right:2px solid #e2e8f0;">
           <div style="font-weight:600;font-size:13px;">${e.name}</div>
-          <div style="font-size:11px;color:#64748b;">${e.emp_code} · <span style="background:${e.type==='STAFF'?'#dbeafe':'#dcfce7'};color:${e.type==='STAFF'?'#1e40af':'#166534'};padding:1px 5px;border-radius:8px;">${e.type}</span></div>
+          <div style="font-size:11px;color:#64748b;">${e.emp_code} · <span style="background:${e.type==='STAFF'?'#FDECEA':'#dcfce7'};color:${e.type==='STAFF'?'#922B21':'#166534'};padding:1px 5px;border-radius:8px;">${e.type}</span></div>
         </td>
         ${cells}
         <td style="text-align:center;padding:4px 8px;white-space:nowrap;font-size:12px;background:#f8fafc;">

@@ -79,7 +79,7 @@ const SSIAuth = (() => {
     const userInfoEl = document.getElementById('user-info');
     if (userInfoEl) userInfoEl.innerHTML = `
       <div style="font-weight:600;color:#e2e8f0;">${user.name}</div>
-      <div style="color:#93c5fd;font-size:.7rem;">${user.role}</div>`;
+      <div style="color:#F1948A;font-size:.7rem;">${user.role}</div>`;
 
     const topName = document.getElementById('top-user-name');
     const topRole = document.getElementById('top-user-role');

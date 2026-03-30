@@ -256,7 +256,7 @@ const SSIApp = {
   toast(msg, type)    { this._toast(msg, type); },
   toastMsg(msg, type) { this._toast(msg, type); },
   _toast(msg, type = 'success') {
-    const colors = { success:'#16a34a', error:'#dc2626', warning:'#d97706', info:'#2563eb' };
+    const colors = { success:'#16a34a', error:'#dc2626', warning:'#d97706', info:'#C0392B' };
     const el = document.createElement('div');
     el.style.cssText = `position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;background:${colors[type] || colors.info};color:#fff;padding:.65rem 1.25rem;border-radius:.6rem;font-size:.875rem;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25);transition:opacity .4s;max-width:340px;word-wrap:break-word;`;
     el.textContent = msg;

@@ -3,15 +3,20 @@
    payroll.js
    Access: ADMIN = all (staff + workers)
            ACCOUNTANT = workers only (staff salary hidden)
-   Formula: Net = (MonthlySalary/30) × EffectiveDays + OT(₹50/hr) − Deductions
-   Staff:   up to 2 paid leaves counted as present
+   Formula: Net = (MonthlySalary/daysInMonth) × EffectiveDays + OT − EPF − ESI − Advance
+   OT Rate  = (MonthlySalary / daysInMonth / 8) per hour  (8-hr working day)
+   EPF      = 12% of Basic (employer contribution, deducted for display)
+   ESI      = 0.75% of Gross (employee, only if Gross ≤ ₹21,000)
+   Advance  = manual entry per payroll record
+   Staff:   up to 2 paid leaves counted as Present
    Workers: overtime eligible, no paid leaves
    ============================================================ */
 const SSIPayroll = (() => {
 
-  const OT_RATE   = 50;   // ₹ per hour
   const PAID_LEAVES_STAFF = 2;
-  const SALARY_DAYS = 30;
+  const EPF_RATE  = 0.12;    // 12% employer EPF on basic
+  const ESI_RATE  = 0.0075;  // 0.75% employee ESI on gross
+  const ESI_LIMIT = 21000;   // ESI not applicable above ₹21,000 gross
 
   /* ── render ─────────────────────────────────────────────── */
   function render(area) {
@@ -177,6 +182,7 @@ const SSIPayroll = (() => {
         <td>${st_badge}</td>
         <td style="white-space:nowrap;">
           ${p.status!=='PAID' ? `<button class="btn btn-secondary btn-sm" onclick="SSIPayroll.openEdit('${p.id}')" title="Edit deductions/remarks">✏️</button>` : ''}
+                    ${(p.status!=='PAID'&&SSIApp.hasRole('ADMIN')) ? `<button class="btn btn-danger btn-sm" onclick="SSIPayroll.deletePayroll('${p.id}')" title="Delete record">🗑️</button>` : ''}
           ${p.status!=='PAID' ? `<button class="btn btn-primary btn-sm" onclick="SSIPayroll.markPaid('${p.id}')" title="Mark as Paid" style="font-size:11px;">✅ Paid</button>` : ''}
           <button class="btn btn-secondary btn-sm" onclick="SSIPayroll.printSlip('${p.id}')" title="Print Slip">🖨️</button>
         </td>
@@ -213,16 +219,16 @@ const SSIPayroll = (() => {
             ${(st.units||[]).filter(u=>u.active).map(u=>`<option value="${u.id}">${u.name}</option>`).join('')}
           </select>
         </div>
-        <div>
-          <label>OT Rate (₹/hr)</label>
-          <input type="number" id="gen-ot-rate" value="${OT_RATE}" min="0">
-        </div>
+        <div style="background:#e0f2fe;border-radius:8px;padding:10px;font-size:12px;color:#0369a1;">
+          <b>ℹ️ OT Rate</b><br>Auto = Monthly ÷ days ÷ 8 hrs<br>e.g. ₹15,000 salary in 31-day month = ₹60.48/hr</div>
       </div>
       <div style="background:#fef3c7;border-radius:8px;padding:12px;font-size:13px;margin-bottom:16px;">
         <b>ℹ️ Rules applied:</b><br>
-        • Per day salary = Monthly / ${SALARY_DAYS}<br>
+        • Per day salary = Monthly ÷ actual days in selected month (28/29/30/31)<br>
+        • OT rate = (Monthly Salary ÷ days ÷ 8) per hour — auto-calculated<br>
         • Staff: up to ${PAID_LEAVES_STAFF} leaves/month counted as Present<br>
-        • Workers: overtime @ ₹ per hour (configurable above)<br>
+        • Workers: overtime eligible (Staff: no OT)<br>
+        • EPF = 12% of basic earnings (employer), ESI = 0.75% if Gross ≤ ₹21,000<br>
         • Half day = 0.5 day pay<br>
         • Existing payroll for same employee+month will be <b>overwritten</b> (if not PAID)
       </div>
@@ -236,7 +242,7 @@ const SSIPayroll = (() => {
     const month   = document.getElementById('gen-month')?.value;
     const typeF   = document.getElementById('gen-type')?.value  || '';
     const unitF   = document.getElementById('gen-unit')?.value  || '';
-    const otRate  = parseFloat(document.getElementById('gen-ot-rate')?.value) || OT_RATE;
+    // OT rate is auto-calculated per employee (monthly / daysInMonth / 8)
     if (!month) { SSIApp.toast('Select month'); return; }
 
     const st      = SSIApp.getState();
@@ -285,15 +291,20 @@ const SSIPayroll = (() => {
 
       // Effective working days for salary calc
       const effectiveDays = present + (half * 0.5) + paidLeaves;
-      const perDay        = (emp.monthly_salary||0) / SALARY_DAYS;
+      const perDay        = Math.round(((emp.monthly_salary||0) / daysInMonth) * 100) / 100;
+      const otRate        = Math.round(((emp.monthly_salary||0) / daysInMonth / 8) * 100) / 100;
       const grossBase     = Math.round(perDay * effectiveDays * 100) / 100;
       const otAmount      = emp.type==='WORKER' ? Math.round(otHours * otRate * 100) / 100 : 0;
       const grossPay      = Math.round((grossBase + otAmount) * 100) / 100;
 
-      // Existing deductions (keep if re-generating non-paid)
+      // Existing deductions — keep if re-generating non-paid
       const existing      = st.payroll.find(p=>p.emp_id===emp.id&&p.period===month);
-      const deductions    = existing?.deductions || 0;
-      const netPay        = Math.max(0, Math.round((grossPay - deductions) * 100) / 100);
+      const advance       = existing?.advance || 0;
+      const epfAmount     = Math.round(grossBase * EPF_RATE * 100) / 100;
+      const esiAmount     = grossPay <= ESI_LIMIT ? Math.round(grossPay * ESI_RATE * 100) / 100 : 0;
+      const totalDeduct   = Math.round((advance + epfAmount + esiAmount) * 100) / 100;
+      const deductions    = totalDeduct;  // for backward compat field
+      const netPay        = Math.max(0, Math.round((grossPay - totalDeduct) * 100) / 100);
 
       const rec = {
         id:             existing?.id || SSIApp.uid(),
@@ -311,7 +322,10 @@ const SSIPayroll = (() => {
         ot_rate:        otRate,
         ot_amount:      otAmount,
         gross_pay:      grossPay,
-        deductions,
+        advance:        advance,
+        epf_amount:     epfAmount,
+        esi_amount:     esiAmount,
+        deductions:     totalDeduct,
         deduction_note: existing?.deduction_note || '',
         net_pay:        netPay,
         status:         existing?.status || 'DRAFT',
@@ -356,15 +370,23 @@ const SSIPayroll = (() => {
         <div>Gross Pay: <b>₹${_fmt(rec.gross_pay)}</b></div>
         <div>OT Amount: <b>₹${_fmt(rec.ot_amount)}</b></div>
         <div>Present: <b>${rec.present_days}</b> days</div>
-        <div>Paid Leaves: <b>${rec.paid_leaves}</b></div>
+        <div>Working Days: <b>${rec.working_days}</b> days</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div>
-          <label>Deductions (₹) <span style="font-size:11px;color:#64748b;">(advance, loan…)</span></label>
-          <input type="number" id="edit-deduct" value="${rec.deductions||0}" min="0">
+          <label>💰 Advance / Loan Recovery (₹)</label>
+          <input type="number" id="edit-advance" value="${rec.advance||0}" min="0" oninput="SSIPayroll._calcNet()">
         </div>
         <div>
-          <label>Deduction Note</label>
+          <label>📌 EPF (12% of Basic) <span style="font-size:10px;color:#64748b;">auto</span></label>
+          <input type="number" id="edit-epf" value="${rec.epf_amount||0}" min="0" step="0.01" oninput="SSIPayroll._calcNet()">
+        </div>
+        <div>
+          <label>🏥 ESI (0.75% if ≤₹21K) <span style="font-size:10px;color:#64748b;">auto</span></label>
+          <input type="number" id="edit-esi" value="${rec.esi_amount||0}" min="0" step="0.01" oninput="SSIPayroll._calcNet()">
+        </div>
+        <div>
+          <label>📝 Deduction Note</label>
           <input id="edit-deduct-note" value="${rec.deduction_note||''}" placeholder="e.g. Advance recovery">
         </div>
         <div>
@@ -383,32 +405,41 @@ const SSIPayroll = (() => {
       </div>
       <div style="background:#dbeafe;border-radius:8px;padding:12px;margin-top:14px;text-align:center;">
         <span style="font-size:13px;">Revised Net Pay: </span>
-        <span id="edit-net-preview" style="font-size:20px;font-weight:800;color:#1e40af;">₹${_fmt(rec.gross_pay)}</span>
+        <span id="edit-net-preview" data-gross="${rec.gross_pay}" style="font-size:20px;font-weight:800;color:#1e40af;">₹${_fmt(rec.net_pay||rec.gross_pay)}</span>
       </div>
-      <script>
-        document.getElementById('edit-deduct').addEventListener('input', function(){
-          const d = parseFloat(this.value)||0;
-          const n = Math.max(0, ${rec.gross_pay} - d);
-          document.getElementById('edit-net-preview').textContent = '₹' + n.toLocaleString('en-IN');
-        });
-      <\/script>
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
         <button class="btn btn-secondary" onclick="SSIApp.closeModal()">Cancel</button>
         <button class="btn btn-primary" onclick="SSIPayroll.saveEdit('${recId}')">💾 Save</button>
       </div>`);
   }
 
+  function _calcNet() {
+    const adv = parseFloat(document.getElementById('edit-advance')?.value)||0;
+    const epf = parseFloat(document.getElementById('edit-epf')?.value)||0;
+    const esi = parseFloat(document.getElementById('edit-esi')?.value)||0;
+    const gross = parseFloat(document.getElementById('edit-net-preview')?.dataset?.gross || 0);
+    const n = Math.max(0, gross - adv - epf - esi);
+    const el = document.getElementById('edit-net-preview');
+    if (el) { el.textContent = '₹' + n.toLocaleString('en-IN',{maximumFractionDigits:2}); }
+  }
+
   async function saveEdit(recId) {
     const st  = SSIApp.getState();
     const idx = (st.payroll||[]).findIndex(p=>p.id===recId);
     if (idx<0) return;
-    const rec   = st.payroll[idx];
-    const deduct = Math.max(0, parseFloat(document.getElementById('edit-deduct')?.value)||0);
-    const netPay = Math.max(0, Math.round((rec.gross_pay - deduct)*100)/100);
+    const rec     = st.payroll[idx];
+    const advance = Math.max(0, parseFloat(document.getElementById('edit-advance')?.value)||0);
+    const epf     = Math.max(0, parseFloat(document.getElementById('edit-epf')?.value)||0);
+    const esi     = Math.max(0, parseFloat(document.getElementById('edit-esi')?.value)||0);
+    const totalD  = Math.round((advance + epf + esi)*100)/100;
+    const netPay  = Math.max(0, Math.round((rec.gross_pay - totalD)*100)/100);
 
     st.payroll[idx] = {
       ...rec,
-      deductions:     deduct,
+      advance,
+      epf_amount:     epf,
+      esi_amount:     esi,
+      deductions:     totalD,
       deduction_note: document.getElementById('edit-deduct-note')?.value.trim()||'',
       payment_mode:   document.getElementById('edit-pay-mode')?.value||'',
       remarks:        document.getElementById('edit-remarks')?.value.trim()||'',
@@ -443,7 +474,7 @@ const SSIPayroll = (() => {
     if (!rec) return;
     const emp  = (st.employees||[]).find(e=>e.id===rec.emp_id);
     const unit = (st.units||[]).find(u=>u.id===emp?.unit_id);
-    const perDay = (rec.monthly_salary/SALARY_DAYS).toFixed(2);
+    const perDay = ((rec.monthly_salary||0)/(rec.working_days||30)).toFixed(2);
 
     const slip = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Salary Slip</title>
     <style>
@@ -471,12 +502,15 @@ const SSIPayroll = (() => {
       <tr><td class="row-label">Present Days</td><td>${rec.present_days}</td><td class="row-label">Per Day Rate</td><td>₹${perDay}</td></tr>
       <tr><td class="row-label">Half Days</td><td>${rec.half_days}</td><td class="row-label">Basic Earnings</td><td>₹${_fmt(rec.gross_pay - rec.ot_amount)}</td></tr>
       <tr><td class="row-label">Leaves Taken</td><td>${rec.leave_days}</td><td class="row-label">OT Hours</td><td>${rec.ot_hours} hrs</td></tr>
-      <tr><td class="row-label">Paid Leaves</td><td>${rec.paid_leaves}</td><td class="row-label">OT Amount (₹${rec.ot_rate}/hr)</td><td>₹${_fmt(rec.ot_amount)}</td></tr>
+      <tr><td class="row-label">Paid Leaves</td><td>${rec.paid_leaves}</td><td class="row-label">OT Amount (₹${(rec.ot_rate||0).toFixed(2)}/hr)</td><td>₹${_fmt(rec.ot_amount)}</td></tr>
       <tr><td class="row-label">Absent Days</td><td>${rec.absent_days}</td><td class="row-label">Gross Pay</td><td><b>₹${_fmt(rec.gross_pay)}</b></td></tr>
     </table>
     <table>
       <tr><th colspan="2">📉 Deductions</th></tr>
-      <tr><td class="row-label">Advance / Loan Recovery</td><td>₹${_fmt(rec.deductions)} ${rec.deduction_note?'('+rec.deduction_note+')':''}</td></tr>
+      <tr><td class="row-label">💰 Advance / Loan Recovery</td><td>₹${_fmt(rec.advance||0)} ${rec.deduction_note?'('+rec.deduction_note+')':''}</td></tr>
+      <tr><td class="row-label">📌 EPF (Employer 12%)</td><td>₹${_fmt(rec.epf_amount||0)}</td></tr>
+      <tr><td class="row-label">🏥 ESI (Employee 0.75%)</td><td>₹${_fmt(rec.esi_amount||0)}${(rec.gross_pay||0)>21000?' <span style="font-size:10px;color:#94a3b8;">(N/A: Gross > ₹21,000)</span>':''}</td></tr>
+      <tr><td class="row-label"><b>Total Deductions</b></td><td><b>₹${_fmt(rec.deductions||0)}</b></td></tr>
     </table>
     <table>
       <tr class="total"><td>NET PAY</td><td style="text-align:right;font-size:18px;">₹${_fmt(rec.net_pay)}</td></tr>
@@ -492,6 +526,23 @@ const SSIPayroll = (() => {
 
     const w = window.open('', '_blank');
     if (w) { w.document.write(slip); w.document.close(); }
+  }
+
+  /* ── Delete payroll record (ADMIN only, DRAFT/PROCESSED only) ── */
+  async function deletePayroll(recId) {
+    if (!SSIApp.hasRole('ADMIN')) { SSIApp.toast('🔒 Admin only'); return; }
+    const st  = SSIApp.getState();
+    const rec = (st.payroll||[]).find(p=>p.id===recId);
+    if (!rec) return;
+    if (rec.status === 'PAID') { SSIApp.toast('❌ Cannot delete a PAID payroll record'); return; }
+    const emp = (st.employees||[]).find(e=>e.id===rec.emp_id);
+    const ok  = await SSIApp.confirm(`Delete payroll for ${emp?.name||'this employee'} (${_fmtPeriod(rec.period)})? This cannot be undone.`);
+    if (!ok) return;
+    st.payroll = st.payroll.filter(p=>p.id!==recId);
+    await SSIApp.saveState(st);
+    SSIApp.audit('PAYROLL_DELETE', `Deleted payroll: ${rec.emp_id} period ${rec.period}`);
+    SSIApp.toast('🗑️ Payroll record deleted');
+    applyFilter();
   }
 
   /* ── Export ──────────────────────────────────────────────── */
@@ -544,7 +595,7 @@ const SSIPayroll = (() => {
   return {
     render, refresh, applyFilter,
     openGenerateModal, runGenerate,
-    openEdit, saveEdit, markPaid,
+    openEdit, saveEdit, _calcNet, deletePayroll, markPaid,
     printSlip, exportExcel
   };
 })();

@@ -77,8 +77,9 @@ const SSIDispatch = (() => {
                     <td><span class="badge ${o.status==='DISPATCHED'?'badge-dispatched':'badge-cancelled'}">${o.status}</span></td>
                     <td style="font-size:12px;">${dispBy?.name||'—'}</td>
                     <td style="font-size:12px;">${SSIApp.dateFmt(o.dispatched_at)}</td>
+                    <td>${SSIApp.hasRole('ADMIN') ? `<button class="btn btn-danger btn-sm" onclick="SSIDispatch.deleteDispatch('${o.id}')" title="Delete dispatch record">🗑️</button>` : ''}</td>
                   </tr>`;
-                }).join('') || '<tr><td colspan="10" style="text-align:center;padding:30px;color:#94a3b8;">No dispatch history yet</td></tr>'}
+                }).join('') || '<tr><td colspan="11" style="text-align:center;padding:30px;color:#94a3b8;">No dispatch history yet</td></tr>'}
               </tbody>
             </table>
           </div>
@@ -97,7 +98,7 @@ const SSIDispatch = (() => {
     // Check if any item has insufficient stock
     const hasInsufficient = (o.items||[]).some(item => SSIApp.getStock(item.product_id, o.unit_id) < (item.total_qty||0));
 
-    return `<div style="background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:16px;overflow:hidden;border-left:4px solid ${o.urgent?'#dc2626':'#2563eb'};">
+    return `<div style="background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:16px;overflow:hidden;border-left:4px solid ${o.urgent?'#dc2626':'#C0392B'};">
       <!-- Header -->
       <div style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;background:${o.urgent?'#fff5f5':'#f8fafc'};">
         <div style="display:flex;align-items:center;gap:12px;">
@@ -409,5 +410,21 @@ const SSIDispatch = (() => {
     SSIApp.toast('Dispatch history exported ✅');
   }
 
-  return { render, refresh, openDispatchModal, confirmDispatch, updateDispatchTotal, showTab, exportExcel };
+  
+  /* ── Delete dispatch record (ADMIN only) ─────────────────── */
+  async function deleteDispatch(dispId) {
+    if (!SSIApp.hasRole('ADMIN')) { SSIApp.toast('🔒 Admin only'); return; }
+    const st   = SSIApp.getState();
+    const disp = (st.dispatch||[]).find(d=>d.id===dispId);
+    if (!disp) return;
+    const ok = await SSIApp.confirm(`Delete this dispatch record (${disp.dispatch_no||dispId})? This does not affect inventory. Cannot be undone.`);
+    if (!ok) return;
+    st.dispatch = (st.dispatch||[]).filter(d=>d.id!==dispId);
+    await SSIApp.saveState(st);
+    SSIApp.audit('DISPATCH_DELETE', `Deleted dispatch: ${disp.dispatch_no||dispId}`);
+    SSIApp.toast('🗑️ Dispatch record deleted');
+    refresh(document.getElementById('page-area'));
+  }
+
+return { render, refresh, openDispatchModal, confirmDispatch, updateDispatchTotal, showTab, deleteDispatch, exportExcel };
 })();

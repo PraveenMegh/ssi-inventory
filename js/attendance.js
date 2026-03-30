@@ -471,10 +471,28 @@ const SSIAttendance = (() => {
     SSIApp.excelDownload(rows, 'Attendance', `SSI_Attendance_${month}`);
   }
 
+
+  /* ── Delete single attendance record (ADMIN only) ─────────── */
+  async function deleteRecord(recId) {
+    if (!SSIApp.hasRole('ADMIN')) { SSIApp.toast('🔒 Admin only'); return; }
+    const st  = SSIApp.getState();
+    const rec = (st.attendance||[]).find(a=>a.id===recId);
+    if (!rec) return;
+    const emp = (st.employees||[]).find(e=>e.id===rec.emp_id);
+    const ok  = await SSIApp.confirm(`Delete attendance record for ${emp?.name||'this employee'} on ${rec.date}?`);
+    if (!ok) return;
+    st.attendance = (st.attendance||[]).filter(a=>a.id!==recId);
+    await SSIApp.saveState(st);
+    SSIApp.audit('ATTENDANCE_DELETE', `Deleted attendance: ${rec.emp_id} ${rec.date}`);
+    SSIApp.toast('🗑️ Attendance record deleted');
+    applyFilter();
+  }
+
   return {
     render, refresh, applyFilter,
     openBulkEntry, saveBulk,
     quickEdit, _setStatus, _saveQuickEdit,
+    deleteRecord,
     downloadTemplate, importFile, exportExcel
   };
 })();

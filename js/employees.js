@@ -386,6 +386,22 @@ const SSIEmployees = (() => {
     input.value = '';
   }
 
+  /* ── Delete employee (ADMIN only) ─────────────────────────── */
+  async function deleteEmployee(id) {
+    if (!SSIApp.hasRole('ADMIN')) { SSIApp.toast('🔒 Admin only'); return; }
+    const st  = SSIApp.getState();
+    const emp = (st.employees||[]).find(e=>e.id===id);
+    if (!emp) return;
+    const ok  = await SSIApp.confirm(`Delete employee "${emp.name}" (${emp.emp_code})? All attendance and payroll records for this employee will remain but they will be removed from the employee list. This cannot be undone.`);
+    if (!ok) return;
+    st.employees = (st.employees||[]).filter(e=>e.id!==id);
+    await SSIApp.saveState(st);
+    SSIApp.audit('EMPLOYEE_DELETE', `Deleted employee: ${emp.emp_code} ${emp.name}`);
+    SSIApp.toast('🗑️ Employee deleted');
+    refresh(document.getElementById('page-area'));
+  }
+
+
   /* ── Export ──────────────────────────────────────────────── */
   function exportExcel() {
     const st = SSIApp.getState();
@@ -404,5 +420,5 @@ const SSIEmployees = (() => {
     SSIApp.excelDownload(rows, 'Employees', 'SSI_Employee_Export');
   }
 
-  return { render, refresh, applyFilter, openForm, saveEmployee, toggleActive, downloadTemplate, importFile, exportExcel };
+  return { render, refresh, applyFilter, openForm, saveEmployee, toggleActive, deleteEmployee, downloadTemplate, importFile, exportExcel };
 })();

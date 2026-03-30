@@ -1,0 +1,9 @@
+{
+  "name": "SSI Inventory",
+  "short_name": "SSI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e7a7a",
+  "theme_color": "#c0392b",
+  "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+}

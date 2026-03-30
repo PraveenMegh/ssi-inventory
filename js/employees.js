@@ -119,6 +119,7 @@ const SSIEmployees = (() => {
           ${SSIApp.hasRole('ADMIN') ? `
             <button class="btn btn-secondary btn-sm" onclick="SSIEmployees.openForm('${e.id}')" title="Edit">✏️</button>
             <button class="btn btn-secondary btn-sm" onclick="SSIEmployees.toggleActive('${e.id}')" title="${active?'Deactivate':'Activate'}">${active?'🔴':'🟢'}</button>
+            <button class="btn btn-danger btn-sm" onclick="SSIEmployees.deleteEmployee('${e.id}')" title="Delete employee">🗑️</button>
           ` : ''}
         </td>
       </tr>`;

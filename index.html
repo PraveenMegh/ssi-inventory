@@ -20,7 +20,11 @@
 
   <!-- ✅ Firebase SDK — MUST load before firebase.js -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script><script>
+  if ('serviceWorker' in navigator)
+    navigator.serviceWorker.register('/sw.js');
+  </script>
 
   <style>
     /* ── Reset ── */

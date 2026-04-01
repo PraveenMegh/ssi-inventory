@@ -199,6 +199,14 @@ const SSIApp = {
     return u ? roles.includes(u.role) : false;
   },
 
+  // ── Compatibility alias: older modules call requireRole(['ADMIN']) ──────────
+  requireRole(rolesArray) {
+    const u = this.state.currentUser;
+    if (!u) return false;
+    if (!rolesArray || rolesArray.length === 0) return true;
+    return rolesArray.includes(u.role);
+  },
+
   getState()     { return this.state; },
   currentUser()  { return this.state.currentUser || null; },
 

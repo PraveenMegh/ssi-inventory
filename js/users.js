@@ -159,7 +159,7 @@ const SSIUsers = (() => {
   }
 
   /* ── Save user (create or update) ────────────────────── */
-  function saveUser(userId) {
+  async function saveUser(userId) {
     const name     = (document.getElementById('usr-name')?.value     || '').trim();
     const username = (document.getElementById('usr-username')?.value || '').trim().toLowerCase();
     const password = (document.getElementById('usr-password')?.value || '').trim();
@@ -173,7 +173,7 @@ const SSIUsers = (() => {
 
     if (!name)     { showErr('Full Name is required.'); return; }
     if (!username) { showErr('Username is required.'); return; }
-    if (!/^[a-z0-9_]+$/.test(username)) { showErr('Username may only contain lowercase letters, numbers, and underscores.'); return; }
+    if (!/^[a-z0-9_.@-]+$/.test(username)) { showErr('Username may only contain letters, numbers, underscore, hyphen, dot or @.'); return; }
 
     const st    = SSIApp.getState();
     const users = st.users || [];
@@ -193,8 +193,8 @@ const SSIUsers = (() => {
       user.role     = role;
       user.active   = active;
       if (password) user.password = password;   // Only update if new password provided
-      SSIApp.saveState(st);
-      SSIApp.toast('✅ User updated');
+      await SSIApp.saveState(st);
+      SSIApp.toast('✅ User updated', 'success');
       SSIApp.audit('USER_EDIT', `Updated user: ${username} (${role})`);
     } else {
       // New user
@@ -207,8 +207,8 @@ const SSIUsers = (() => {
         active,
       };
       st.users = [...users, newUser];
-      SSIApp.saveState(st);
-      SSIApp.toast('✅ User created');
+      await SSIApp.saveState(st);
+      SSIApp.toast('✅ User "' + name + '" created', 'success');
       SSIApp.audit('USER_CREATE', `Created user: ${username} (${role})`);
     }
 

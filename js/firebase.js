@@ -1,5 +1,5 @@
 // ============================================================
-//  SSI Inventory — Firebase Firestore Integration (v3 FINAL)
+//  SSI Inventory — Firebase Firestore Integration (v4 FIXED)
 //  firebase.js
 //  Firebase SDK compat scripts MUST be loaded in index.html
 //  BEFORE this file.
@@ -23,8 +23,10 @@
   const db      = firebase.firestore();
   const DOC_REF = db.collection('ssi').doc('data');
 
-  let _unsubscribe = null;
-  let _isSaving    = false;
+  let _unsubscribe  = null;
+  let _isSaving     = false;
+  let _pendingSave  = null;   // FIX: queue the latest save instead of dropping it
+  let _saveTimer    = null;
 
   // ── Force long polling (helps behind firewalls/proxies/Render) ──
   try {
@@ -72,14 +74,20 @@
   }
 
   // ── Save ────────────────────────────────────────────────────
+  // FIX: Instead of silently dropping saves when _isSaving=true,
+  //      we queue the latest save and run it once current save finishes.
   async function saveToFirestore(stateObj) {
-    // Always keep localStorage in sync first (instant, offline-safe)
+    // Always write localStorage immediately (instant, offline-safe)
     try { localStorage.setItem('ssiData', JSON.stringify(stateObj)); } catch (e) {}
 
-    if (_isSaving) return;  // prevent concurrent saves
+    if (_isSaving) {
+      // Queue this save — it will run after current save finishes
+      _pendingSave = stateObj;
+      return;
+    }
 
+    _isSaving = true;
     try {
-      _isSaving = true;
       await DOC_REF.set(stateObj);
       showSyncBadge(true);
       console.log('[SSI Firebase] ✅ Saved to Firestore');
@@ -87,7 +95,17 @@
       console.warn('[SSI Firebase] Firestore save failed:', err.message);
       showSyncBadge(false);
     } finally {
-      setTimeout(() => { _isSaving = false; }, 1000);
+      // FIX: Extend guard to 5s so syncListener doesn't overwrite fresh data
+      clearTimeout(_saveTimer);
+      _saveTimer = setTimeout(() => {
+        _isSaving = false;
+        // Run any queued save
+        if (_pendingSave) {
+          const next = _pendingSave;
+          _pendingSave = null;
+          saveToFirestore(next);
+        }
+      }, 5000);
     }
   }
 
@@ -98,6 +116,7 @@
     _unsubscribe = DOC_REF.onSnapshot(
       { includeMetadataChanges: false },
       snap => {
+        // FIX: skip if we just saved (prevents overwriting our own fresh changes)
         if (!snap || !snap.exists || _isSaving) return;
 
         const incoming    = snap.data();

@@ -22,8 +22,8 @@ const SSIOrders = (() => {
     const isSales = user?.role === 'SALES';
 
     const orders = isSales
-      ? st.orders.filter(o => o.created_by === user.id)
-      : [...st.orders];
+      ? (st.orders||[]).filter(o => o.created_by === user.id)
+      : [...(st.orders||[])];
     orders.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
 
     const statusBadge = o => {
@@ -543,7 +543,7 @@ const SSIOrders = (() => {
     return items;
   }
 
-  function saveOrder(orderId, status) {
+  async function saveOrder(orderId, status) {
     const date     = document.getElementById('ord-date')?.value;
     const unitId   = document.getElementById('ord-unit')?.value;
     const clientId = document.getElementById('ord-client')?.value;
@@ -596,7 +596,8 @@ const SSIOrders = (() => {
       SSIApp.toast(`Order ${orderNo} ${status==='SUBMITTED'?'submitted':'saved'} ✅`);
     }
 
-    SSIApp.saveState(st);
+    if (!st.orders) st.orders = [];
+    await SSIApp.saveState(st);
     SSIApp.closeModal();
     SSIApp.audit('ORDER_SAVE', `Order ${status}`);
     refresh(document.getElementById('page-area'));

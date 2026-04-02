@@ -4,6 +4,19 @@ const SSIClients = (() => {
 
   let _searchTerm = '';
 
+  // ── Visible clients helper (SALES sees only their assigned clients) ─────────
+  function visibleClients(st, user) {
+    const all = st.clients || [];
+    if (!user || user.role === 'ADMIN') return all;
+    // SALES: match assignedTo by username OR by display name (case-insensitive)
+    const uname = (user.username || '').toLowerCase();
+    const uname2 = (user.name    || '').toLowerCase();
+    return all.filter(c => {
+      const at = (c.assignedTo || '').toLowerCase();
+      return at === uname || at === uname2;
+    });
+  }
+
   // ── Main render ─────────────────────────────────────────────────────────────
   function render(area) {
     _searchTerm = '';
@@ -15,9 +28,11 @@ const SSIClients = (() => {
   }
 
   function refresh(area) {
-    const st = SSIApp.getState();
-    const allClients = st.clients || [];
-    const isAdmin = SSIApp.hasRole('ADMIN');
+    const st   = SSIApp.getState();
+    const user = SSIApp.currentUser();
+    // SALES users only see clients assigned to them; ADMIN sees all
+    const allClients = visibleClients(st, user);
+    const isAdmin    = SSIApp.hasRole('ADMIN');
     const q = _searchTerm.toLowerCase().trim();
     const clients = q
       ? allClients.filter(c =>
@@ -30,7 +45,7 @@ const SSIClients = (() => {
         )
       : allClients;
 
-    // Count actives for summary bar
+    // Count actives for summary bar (from visible set only)
     const activeCount   = allClients.filter(c => c.active !== false).length;
     const inactiveCount = allClients.length - activeCount;
 
@@ -419,6 +434,7 @@ const SSIClients = (() => {
   // ── Public API ────────────────────────────────────────────────────────────────
   return {
     render,
+    visibleClients,
     _area: null,
     _edit:             _openForm,
     _del,

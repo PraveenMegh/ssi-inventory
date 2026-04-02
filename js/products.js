@@ -7,14 +7,27 @@ const SSIProducts = (() => {
     {label:'50 KG',kg:50},{label:'Units/NOS',kg:0}
   ];
 
+  let _searchTerm = '';
+
   function render(area) {
     if (!SSIApp.hasRole('ADMIN','STOCK')) { area.innerHTML='<div class="empty-state"><div class="icon">🔒</div><p>Access Denied</p></div>'; return; }
+    _searchTerm = '';
     refresh(area);
   }
 
   function refresh(area) {
-    const st = SSIApp.getState();
-    const products = st.products.filter(p=>p.active);
+    SSIProducts._area = area;
+    const st  = SSIApp.getState();
+    const allActive = st.products.filter(p => p.active !== false);
+    const q   = _searchTerm.toLowerCase().trim();
+    const products = q
+      ? allActive.filter(p =>
+          (p.name        || '').toLowerCase().includes(q) ||
+          (p.sku         || '').toLowerCase().includes(q) ||
+          (p.description || '').toLowerCase().includes(q) ||
+          (p.uom         || '').toLowerCase().includes(q)
+        )
+      : allActive;
 
     area.innerHTML = `
       <div class="page-header">
@@ -28,6 +41,25 @@ const SSIProducts = (() => {
           <button class="btn btn-secondary btn-sm" onclick="SSIProducts.exportExcel()">📤 Export</button>
           <button class="btn btn-primary" onclick="SSIProducts.openForm()">+ Add Product</button>
         </div>` : ''}
+      </div>
+
+      <!-- Search bar -->
+      <div style="margin-bottom:12px;">
+        <div style="position:relative;max-width:360px;">
+          <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:16px;">🔍</span>
+          <input id="prod-search"
+            type="text"
+            value="${_searchTerm}"
+            placeholder="Search by name, SKU, description…"
+            oninput="SSIProducts._onSearch(this.value)"
+            style="width:100%;padding:8px 12px 8px 34px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;"
+            onfocus="this.style.borderColor='#C0392B'"
+            onblur="this.style.borderColor='#e2e8f0'" />
+          ${_searchTerm ? `<button onclick="SSIProducts._onSearch('')" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;font-size:16px;">✕</button>` : ''}
+        </div>
+        <div style="font-size:12px;color:#94a3b8;margin-top:4px;">
+          Showing <strong>${products.length}</strong> of <strong>${allActive.length}</strong> products
+        </div>
       </div>
 
       <div class="card">
@@ -221,5 +253,15 @@ const SSIProducts = (() => {
     SSIApp.toast('Products exported ✅');
   }
 
-  return { render, openForm, saveProduct, deleteProduct, downloadTemplate, importExcel, exportExcel };
+  function _onSearch(val) {
+    _searchTerm = val;
+    const area = SSIProducts._area;
+    if (area) refresh(area);
+    setTimeout(() => {
+      const el = document.getElementById('prod-search');
+      if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+    }, 0);
+  }
+
+  return { render, openForm, saveProduct, deleteProduct, downloadTemplate, importExcel, exportExcel, _onSearch, _area: null };
 })();

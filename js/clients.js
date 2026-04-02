@@ -2,8 +2,11 @@
 
 const SSIClients = (() => {
 
+  let _searchTerm = '';
+
   // ── Main render ─────────────────────────────────────────────────────────────
   function render(area) {
+    _searchTerm = '';
     if (!SSIApp.hasRole('ADMIN', 'SALES')) {
       area.innerHTML = '<div class="empty-state"><div class="icon">🔒</div><p>Access Denied</p></div>';
       return;
@@ -13,12 +16,23 @@ const SSIClients = (() => {
 
   function refresh(area) {
     const st = SSIApp.getState();
-    const clients = st.clients || [];
+    const allClients = st.clients || [];
     const isAdmin = SSIApp.hasRole('ADMIN');
+    const q = _searchTerm.toLowerCase().trim();
+    const clients = q
+      ? allClients.filter(c =>
+          (c.name       || '').toLowerCase().includes(q) ||
+          (c.tel        || '').toLowerCase().includes(q) ||
+          (c.gst        || '').toLowerCase().includes(q) ||
+          (c.assignedTo || '').toLowerCase().includes(q) ||
+          (c.type       || '').toLowerCase().includes(q) ||
+          (c.address    || '').toLowerCase().includes(q)
+        )
+      : allClients;
 
     // Count actives for summary bar
-    const activeCount   = clients.filter(c => c.active !== false).length;
-    const inactiveCount = clients.length - activeCount;
+    const activeCount   = allClients.filter(c => c.active !== false).length;
+    const inactiveCount = allClients.length - activeCount;
 
     const rows = clients.map(c => {
       // treat missing active field as active (legacy imported data)
@@ -73,7 +87,27 @@ const SSIClients = (() => {
         </div>` : ''}
       </div>
 
+      <!-- Search bar -->
+      <div style="margin-bottom:12px;">
+        <div style="position:relative;max-width:380px;">
+          <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:16px;">🔍</span>
+          <input id="client-search"
+            type="text"
+            value="${_searchTerm}"
+            placeholder="Search name, phone, GST, assigned to…"
+            oninput="SSIClients._onSearch(this.value)"
+            style="width:100%;padding:8px 12px 8px 34px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;"
+            onfocus="this.style.borderColor='#C0392B'"
+            onblur="this.style.borderColor='#e2e8f0'" />
+          ${_searchTerm ? `<button onclick="SSIClients._onSearch('')" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;font-size:16px;">✕</button>` : ''}
+        </div>
+        <div style="font-size:12px;color:#94a3b8;margin-top:4px;">
+          Showing <strong>${clients.length}</strong> of <strong>${allClients.length}</strong> entries
+        </div>
+      </div>
+
       <!-- Summary bar -->
+
       <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
         <div style="background:#dcfce7;color:#166534;padding:6px 16px;border-radius:20px;font-size:13px;font-weight:600;">
           ✅ Active: ${activeCount}
@@ -371,6 +405,17 @@ const SSIClients = (() => {
     }
   }
 
+  // ── Search ───────────────────────────────────────────────────────────────────
+  function _onSearch(val) {
+    _searchTerm = val;
+    const area = SSIClients._area;
+    if (area) refresh(area);
+    setTimeout(() => {
+      const el = document.getElementById('client-search');
+      if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+    }, 0);
+  }
+
   // ── Public API ────────────────────────────────────────────────────────────────
   return {
     render,
@@ -384,6 +429,7 @@ const SSIClients = (() => {
     _save,
     _downloadTemplate,
     _export,
-    _import
+    _import,
+    _onSearch
   };
 })();

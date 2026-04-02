@@ -358,7 +358,7 @@ const SSIDispatch = (() => {
       });
     }
 
-    SSIApp.saveState(st);
+    await SSIApp.saveState(st);
     SSIApp.toast(
       isModified
         ? `Order ${o.order_no} dispatched (Modified: ${SSIApp.qtyFmt(dispatchedQty)} of ${SSIApp.qtyFmt(o.total_qty||0)} KG) ✅`
@@ -412,17 +412,38 @@ const SSIDispatch = (() => {
 
   
   /* ── Delete dispatch record (ADMIN only) ─────────────────── */
-  async function deleteDispatch(dispId) {
-    if (!SSIApp.hasRole('ADMIN')) { SSIApp.toast('🔒 Admin only'); return; }
-    const st   = SSIApp.getState();
-    const disp = (st.dispatch||[]).find(d=>d.id===dispId);
-    if (!disp) return;
-    const ok = await SSIApp.confirm(`Delete this dispatch record (${disp.dispatch_no||dispId})? This does not affect inventory. Cannot be undone.`);
+  async function deleteDispatch(orderId) {
+    if (!SSIApp.hasRole('ADMIN')) { SSIApp.toast('🔒 Admin only', 'error'); return; }
+
+    const st    = SSIApp.getState();
+    // Dispatch records are stored as orders with status DISPATCHED — NOT in a separate st.dispatch array
+    const order = (st.orders||[]).find(o => o.id === orderId);
+    if (!order) {
+      SSIApp.toast('Order not found', 'error');
+      return;
+    }
+
+    // Count how many inventory OUT transactions will be reversed
+    const linkedInvCount = (st.inventory||[]).filter(e => e.order_id === orderId && e.type === 'OUT').length;
+
+    const ok = await SSIApp.confirm(
+      `Delete dispatch record for ${order.order_no}?\n\n` +
+      `This will:\n` +
+      `• Permanently remove the order\n` +
+      `• Reverse ${linkedInvCount} inventory OUT transaction(s)\n\n` +
+      `This cannot be undone.`
+    );
     if (!ok) return;
-    st.dispatch = (st.dispatch||[]).filter(d=>d.id!==dispId);
+
+    // Reverse inventory OUT entries linked to this order
+    st.inventory = (st.inventory||[]).filter(e => !(e.order_id === orderId && e.type === 'OUT'));
+
+    // Remove the order entirely
+    st.orders = (st.orders||[]).filter(o => o.id !== orderId);
+
     await SSIApp.saveState(st);
-    SSIApp.audit('DISPATCH_DELETE', `Deleted dispatch: ${disp.dispatch_no||dispId}`);
-    SSIApp.toast('🗑️ Dispatch record deleted');
+    SSIApp.audit('DISPATCH_DELETE', `Deleted dispatch order ${order.order_no} — ${linkedInvCount} inventory entries reversed`);
+    SSIApp.toast(`🗑️ ${order.order_no} deleted & inventory reversed`, 'success');
     refresh(document.getElementById('page-area'));
   }
 

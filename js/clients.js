@@ -16,8 +16,21 @@ const SSIClients = (() => {
     const clients = st.clients || [];
     const isAdmin = SSIApp.hasRole('ADMIN');
 
-    const rows = clients.map(c => `
-      <tr>
+    // Count actives for summary bar
+    const activeCount   = clients.filter(c => c.active !== false).length;
+    const inactiveCount = clients.length - activeCount;
+
+    const rows = clients.map(c => {
+      // treat missing active field as active (legacy imported data)
+      const isActive = c.active !== false;
+      const statusBadge = isActive
+        ? `<span style="background:#dcfce7;color:#166534;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;cursor:pointer;"
+             onclick="SSIClients._toggleStatus('${c.id}')" title="Click to deactivate">✅ Active</span>`
+        : `<span style="background:#fee2e2;color:#991b1b;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;cursor:pointer;"
+             onclick="SSIClients._toggleStatus('${c.id}')" title="Click to activate">🔴 Inactive</span>`;
+
+      return `
+      <tr style="${isActive ? '' : 'opacity:0.55;background:#fafafa;'}">
         ${isAdmin ? `<td style="width:36px;">
           <input type="checkbox" class="client-cb" data-id="${c.id}"
             style="width:16px;height:16px;accent-color:#C0392B;cursor:pointer;" />
@@ -27,12 +40,14 @@ const SSIClients = (() => {
         <td>${_esc(c.tel || '—')}</td>
         <td style="font-size:12px;color:#64748b;">${_esc(c.gst || '—')}</td>
         <td style="font-size:13px;color:#374151;">${_esc(c.assignedTo || '—')}</td>
+        <td>${statusBadge}</td>
         ${isAdmin ? `<td style="white-space:nowrap;">
           <button class="btn btn-secondary btn-sm" onclick="SSIClients._edit('${c.id}')">✏️ Edit</button>
           <button class="btn btn-danger btn-sm"    onclick="SSIClients._del('${c.id}')">🗑️</button>
         </td>` : ''}
-      </tr>`).join('') ||
-      `<tr><td colspan="${isAdmin ? 7 : 5}" class="empty-state">
+      </tr>`;
+    }).join('') ||
+      `<tr><td colspan="${isAdmin ? 8 : 6}" class="empty-state">
         <div class="icon">👥</div><p>No clients/vendors yet.</p>
       </td></tr>`;
 
@@ -58,6 +73,19 @@ const SSIClients = (() => {
         </div>` : ''}
       </div>
 
+      <!-- Summary bar -->
+      <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+        <div style="background:#dcfce7;color:#166534;padding:6px 16px;border-radius:20px;font-size:13px;font-weight:600;">
+          ✅ Active: ${activeCount}
+        </div>
+        <div style="background:#fee2e2;color:#991b1b;padding:6px 16px;border-radius:20px;font-size:13px;font-weight:600;">
+          🔴 Inactive: ${inactiveCount}
+        </div>
+        <div style="background:#f1f5f9;color:#475569;padding:6px 16px;border-radius:20px;font-size:13px;font-weight:600;">
+          📋 Total: ${clients.length}
+        </div>
+      </div>
+
       <div class="card">
         <div style="overflow-x:auto;">
           <table>
@@ -73,13 +101,11 @@ const SSIClients = (() => {
               <th>Tel</th>
               <th>GST</th>
               <th>Assigned To</th>
+              <th>Status</th>
               ${isAdmin ? '<th>Actions</th>' : ''}
             </tr></thead>
             <tbody>${rows}</tbody>
           </table>
-        </div>
-        <div style="margin-top:8px;font-size:13px;color:#64748b;">
-          Total: <strong>${clients.length}</strong> entries
         </div>
       </div>`;
 
@@ -90,7 +116,6 @@ const SSIClients = (() => {
       });
     }
 
-    // Store area reference for bulk-delete access
     SSIClients._area = area;
   }
 
@@ -100,15 +125,34 @@ const SSIClients = (() => {
   }
 
   function _syncSelectAll(area) {
-    const all = [...(area || SSIClients._area).querySelectorAll('.client-cb')];
+    const all     = [...(area || SSIClients._area).querySelectorAll('.client-cb')];
     const checked = all.filter(c => c.checked);
-    const cbAll = (area || SSIClients._area).querySelector('#cbAll');
+    const cbAll   = (area || SSIClients._area).querySelector('#cbAll');
     if (cbAll) {
-      cbAll.checked = all.length > 0 && checked.length === all.length;
+      cbAll.checked       = all.length > 0 && checked.length === all.length;
       cbAll.indeterminate = checked.length > 0 && checked.length < all.length;
     }
     const btn = (area || SSIClients._area).querySelector('#btnBulkDel');
     if (btn) btn.style.display = checked.length > 0 ? 'inline-flex' : 'none';
+  }
+
+  // ── Toggle Active / Inactive ─────────────────────────────────────────────────
+  async function _toggleStatus(id) {
+    const st     = SSIApp.getState();
+    const client = (st.clients || []).find(c => c.id === id);
+    if (!client) return;
+
+    const wasActive = client.active !== false;
+    client.active   = !wasActive;   // flip
+
+    await SSIApp.saveState(st);
+    SSIApp.toast(
+      wasActive ? `🔴 "${client.name}" marked Inactive` : `✅ "${client.name}" marked Active`,
+      wasActive ? 'warning' : 'success'
+    );
+    SSIApp.audit('TOGGLE_CLIENT_STATUS',
+      `${client.name} → ${client.active ? 'Active' : 'Inactive'}`);
+    if (SSIClients._area) refresh(SSIClients._area);
   }
 
   // ── Select All toggle ────────────────────────────────────────────────────────
@@ -139,9 +183,9 @@ const SSIClients = (() => {
   async function _del(id) {
     const ok = await SSIApp.confirm('Delete this client/vendor?');
     if (!ok) return;
-    const st = SSIApp.getState();
+    const st    = SSIApp.getState();
     const found = (st.clients || []).find(c => c.id === id);
-    st.clients = (st.clients || []).filter(c => c.id !== id);
+    st.clients  = (st.clients || []).filter(c => c.id !== id);
     await SSIApp.saveState(st);
     SSIApp.audit('DELETE_CLIENT', `Deleted: ${found?.name || id}`);
     SSIApp.toast('Client deleted', 'success');
@@ -152,6 +196,7 @@ const SSIClients = (() => {
   function _openForm(id) {
     const st = SSIApp.getState();
     const c  = id ? (st.clients || []).find(x => x.id === id) : null;
+    const isActive = !c || c.active !== false;
 
     SSIApp.showModal(`
       <div class="modal-header">
@@ -192,6 +237,14 @@ const SSIClients = (() => {
               placeholder="Sales person / Employee name">
           </div>
 
+          <div>
+            <label>Status</label>
+            <select id="c-active">
+              <option value="true"  ${isActive  ? 'selected':''}>✅ Active</option>
+              <option value="false" ${!isActive ? 'selected':''}>🔴 Inactive</option>
+            </select>
+          </div>
+
           <div style="grid-column:1/-1;">
             <label>Address</label>
             <textarea id="c-addr" rows="3"
@@ -216,11 +269,12 @@ const SSIClients = (() => {
     const payload = {
       id:         id || SSIApp.uid(),
       name,
-      type:       document.getElementById('c-type')?.value       || 'Client',
-      tel:        document.getElementById('c-tel')?.value.trim() || '',
-      gst:        document.getElementById('c-gst')?.value.trim() || '',
+      type:       document.getElementById('c-type')?.value          || 'Client',
+      tel:        document.getElementById('c-tel')?.value.trim()    || '',
+      gst:        document.getElementById('c-gst')?.value.trim()    || '',
       assignedTo: document.getElementById('c-assigned')?.value.trim() || '',
-      address:    document.getElementById('c-addr')?.value.trim()     || '',
+      address:    document.getElementById('c-addr')?.value.trim()   || '',
+      active:     document.getElementById('c-active')?.value !== 'false',  // true unless explicitly false
       created_at: new Date().toISOString()
     };
 
@@ -257,10 +311,14 @@ const SSIClients = (() => {
   // ── Export Excel ──────────────────────────────────────────────────────────────
   function _export() {
     if (typeof XLSX === 'undefined') { SSIApp.toast('Excel library not loaded', 'error'); return; }
-    const st = SSIApp.getState();
-    const rows = [['Name', 'Type', 'Tel', 'GST', 'Address', 'Assigned To']];
+    const st   = SSIApp.getState();
+    const rows = [['Name', 'Type', 'Tel', 'GST', 'Address', 'Assigned To', 'Status']];
     for (const c of (st.clients || [])) {
-      rows.push([c.name||'', c.type||'', c.tel||'', c.gst||'', c.address||'', c.assignedTo||'']);
+      rows.push([
+        c.name||'', c.type||'', c.tel||'', c.gst||'', c.address||'',
+        c.assignedTo||'',
+        c.active !== false ? 'Active' : 'Inactive'
+      ]);
     }
     SSIApp.excelDownload(rows, 'Clients', 'SSI_Clients_Export');
   }
@@ -282,7 +340,6 @@ const SSIClients = (() => {
         const typeRaw = String(o['Type'] || o['type'] || 'Client').trim();
         const type    = ['Client','Vendor','Both'].includes(typeRaw) ? typeRaw : 'Client';
 
-        // ── FIX: map "Assigned To" column (all common spellings) ──────────────
         const assignedTo = String(
           o['Assigned To'] || o['assigned_to'] || o['AssignedTo'] ||
           o['Assigned to'] || o['ASSIGNED TO'] || o['assignedTo'] || ''
@@ -295,7 +352,8 @@ const SSIClients = (() => {
           tel:        String(o['Tel'] || o['tel'] || o['TEL'] || '').trim(),
           gst:        String(o['GST'] || o['gst'] || o['Gst'] || '').trim(),
           address:    String(o['Address'] || o['address'] || '').trim(),
-          assignedTo,                          // ← was missing before!
+          assignedTo,
+          active:     true,          // all imported clients are Active by default
           created_at: new Date().toISOString()
         });
         added++;
@@ -321,6 +379,7 @@ const SSIClients = (() => {
     _del,
     _bulkDelete,
     _toggleAll,
+    _toggleStatus,
     _openForm,
     _save,
     _downloadTemplate,

@@ -12,8 +12,8 @@ const SSIDashboard = (() => {
     const thisYear  = now.getFullYear();
 
     // ── Stats ──────────────────────────────────────────────────
-    const totalProducts = st.products.filter(p => p.active).length;
-    const totalClients  = st.clients.filter(c => c.active).length;
+    const totalProducts = st.products.filter(p => p.active !== false).length;
+    const totalClients  = st.clients.filter(c => c.active !== false).length;
 
     const ordersThisMonth = st.orders.filter(o => {
       const d = new Date(o.created_at);

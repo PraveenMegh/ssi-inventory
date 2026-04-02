@@ -91,6 +91,18 @@ const SSIApp = {
     }
   },
 
+  // ── Fix legacy imported clients that have no active field ────
+  _migrateClientActive() {
+    let changed = false;
+    (this.state.clients || []).forEach(c => {
+      if (c.active === undefined || c.active === null) {
+        c.active = true;
+        changed  = true;
+      }
+    });
+    if (changed) console.log('[SSI] Migrated client active flags');
+  },
+
   // ── Ensure default units always exist ─────────────────────
   _ensureUnits() {
     if (!this.state.units || this.state.units.length === 0) {
@@ -111,6 +123,7 @@ const SSIApp = {
     // Guarantee defaults even if saved data was corrupt/partial
     this._ensureUsers();
     this._ensureUnits();
+    this._migrateClientActive(); // FIX: set active:true on old imported clients
 
     await this.saveState();
 

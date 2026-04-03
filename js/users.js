@@ -160,6 +160,10 @@ const SSIUsers = (() => {
 
   /* ── Save user (create or update) ────────────────────── */
   async function saveUser(userId) {
+    // Prevent double-click / double-submit
+    const saveBtn = document.querySelector('#user-modal-overlay .btn-primary');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Saving…'; }
+
     const name     = (document.getElementById('usr-name')?.value     || '').trim();
     const username = (document.getElementById('usr-username')?.value || '').trim().toLowerCase();
     const password = (document.getElementById('usr-password')?.value || '').trim();
@@ -169,6 +173,9 @@ const SSIUsers = (() => {
 
     function showErr(msg) {
       if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+      // Re-enable save button so user can correct and retry
+      const btn = document.querySelector('#user-modal-overlay .btn-primary');
+      if (btn) { btn.disabled = false; btn.textContent = '💾 Save User'; }
     }
 
     if (!name)     { showErr('Full Name is required.'); return; }
@@ -199,14 +206,17 @@ const SSIUsers = (() => {
     } else {
       // New user
       const newUser = {
-        id:       'u_' + Date.now(),
+        id:       SSIApp.uid(),
         name,
         username,
         password,
         role,
         active,
       };
-      st.users = [...users, newUser];
+      // Safety dedup: never add if same id already present
+      if (!st.users.find(x => x.id === newUser.id)) {
+        st.users = [...users, newUser];
+      }
       await SSIApp.saveState(st);
       SSIApp.toast('✅ User "' + name + '" created', 'success');
       SSIApp.audit('USER_CREATE', `Created user: ${username} (${role})`);
@@ -217,7 +227,7 @@ const SSIUsers = (() => {
   }
 
   /* ── Toggle active/inactive ───────────────────────────── */
-  function toggleActive(userId) {
+  async function toggleActive(userId) {
     const currentUser = SSIApp.state.currentUser;
     const st    = SSIApp.getState();
     const user  = (st.users || []).find(u => u.id === userId);
@@ -230,7 +240,7 @@ const SSIUsers = (() => {
     }
 
     user.active = !user.active;
-    SSIApp.saveState(st);
+    await SSIApp.saveState(st);
     const action = user.active ? '🟢 Enabled' : '🔴 Disabled';
     SSIApp.toast(`${action}: ${user.name}`);
     SSIApp.audit('USER_TOGGLE', `${action} user: ${user.username}`);
@@ -263,7 +273,7 @@ const SSIUsers = (() => {
     if (!ok) return;
 
     st.users = (st.users || []).filter(u => u.id !== userId);
-    SSIApp.saveState(st);
+    await SSIApp.saveState(st);
     SSIApp.toast('🗑️ User deleted');
     SSIApp.audit('USER_DELETE', `Deleted user: ${user.username} (${user.role})`);
     refresh();

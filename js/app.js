@@ -76,19 +76,30 @@ const SSIApp = {
   // ── Ensure default users always exist ─────────────────────
   _ensureUsers() {
     if (!this.state.users) this.state.users = [];
+    let changed = false;
 
     if (this.state.users.length === 0) {
-      // No users at all — seed all defaults
       this.state.users = [...this._DEFAULT_USERS];
-      return;
+      return true;
     }
 
-    // Make sure every default user exists (add if missing)
+    // Deduplicate users by id (safety net against double-save bug)
+    const seen = new Set();
+    const deduped = [];
+    for (const u of this.state.users) {
+      if (!seen.has(u.id)) { seen.add(u.id); deduped.push(u); }
+      else { changed = true; console.warn('[SSI] Removed duplicate user id:', u.id); }
+    }
+    this.state.users = deduped;
+
+    // Ensure every default user exists (add if missing)
     for (const du of this._DEFAULT_USERS) {
       if (!this.state.users.find(u => u.username === du.username)) {
         this.state.users.push({ ...du });
+        changed = true;
       }
     }
+    return changed;
   },
 
   // ── Fix legacy imported clients that have no active field ────
@@ -101,6 +112,7 @@ const SSIApp = {
       }
     });
     if (changed) console.log('[SSI] Migrated client active flags');
+    return changed;
   },
 
   // ── Ensure default units always exist ─────────────────────
@@ -110,7 +122,9 @@ const SSIApp = {
         { id:'un1', name:'Modinagar', address:'Modinagar, UP', active:true },
         { id:'un2', name:'Patla',     address:'Patla, UP',     active:true }
       ];
+      return true;
     }
+    return false;
   },
 
   // ══════════════════════════════════════════════════════════
@@ -120,12 +134,15 @@ const SSIApp = {
   async init() {
     await this.loadState();
 
-    // Guarantee defaults even if saved data was corrupt/partial
-    this._ensureUsers();
-    this._ensureUnits();
-    this._migrateClientActive(); // FIX: set active:true on old imported clients
-
-    await this.saveState();
+    // Guarantee defaults — only save back if something actually changed
+    // (prevents overwriting Firestore with stale/empty data on every reload)
+    const usersChanged    = this._ensureUsers();
+    const unitsChanged    = this._ensureUnits();
+    const clientsChanged  = this._migrateClientActive();
+    if (usersChanged || unitsChanged || clientsChanged) {
+      console.log('[SSI] Defaults changed — saving state');
+      await this.saveState();
+    }
 
     if (window.SSIFirebase) {
       try { SSIFirebase.syncListener(); } catch(e) {}

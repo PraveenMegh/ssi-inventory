@@ -105,7 +105,7 @@
           _pendingSave = null;
           saveToFirestore(next);
         }
-      }, 5000);
+      }, 8000);  // 8s guard — enough for slow connections
     }
   }
 
@@ -121,6 +121,15 @@
 
         const incoming    = snap.data();
         const currentUser = SSIApp.state.currentUser;
+
+        // Only apply if Firestore data is NEWER than what we have locally
+        // (prevents stale cached snapshots from overwriting fresh data)
+        const incomingTs = incoming.lastSaved || '';
+        const currentTs  = SSIApp.state.lastSaved || '';
+        if (incomingTs && currentTs && incomingTs < currentTs) {
+          console.warn('[SSI Firebase] Skipping stale snapshot (incoming:', incomingTs, '< current:', currentTs, ')');
+          return;
+        }
 
         Object.assign(SSIApp.state, incoming);
         SSIApp.state.currentUser = currentUser;

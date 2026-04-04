@@ -225,29 +225,42 @@
     ::-webkit-scrollbar-thumb { background: #F1948A; border-radius: 99px; }
 
     /* ══════════════════════════════════════════════
-       Login Page  —  Teal-Yellow Geometric Design
+       Login Page — SSI Crimson & White Theme
        ══════════════════════════════════════════════ */
 
-    /* Full-page gradient background: teal → green-teal → yellow */
+    /* ── Full-page WHITE background ── */
     #login-screen {
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, #003333 0%, #00695c 35%, #00897b 70%, #00bfa5 100%);
+      background: #ffffff;
       padding: 2rem 1rem;
       position: relative;
       overflow: hidden;
     }
     #login-screen.hidden { display: none !important; }
 
-    /* Subtle full-screen bg texture dots */
+    /* ── Subtle crimson dot texture overlay ── */
     #login-screen::before {
       content: '';
       position: absolute;
       inset: 0;
-      background-image: radial-gradient(circle, rgba(255,255,255,.07) 1px, transparent 1px);
-      background-size: 40px 40px;
+      background-image: radial-gradient(circle, rgba(192,57,43,.06) 1px, transparent 1px);
+      background-size: 36px 36px;
+      pointer-events: none;
+    }
+
+    /* ── Large soft crimson blobs for depth ── */
+    #login-screen::after {
+      content: '';
+      position: absolute;
+      width: 600px;
+      height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(192,57,43,.10) 0%, transparent 70%);
+      top: -150px;
+      left: -150px;
       pointer-events: none;
     }
 
@@ -255,27 +268,28 @@
     #login-card-wrapper {
       position: relative;
       width: 100%;
-      max-width: 440px;
+      max-width: 420px;
       animation: loginFadeUp .55s ease-out;
+      z-index: 1;
     }
 
     @keyframes loginFadeUp {
-      from { opacity:0; transform:translateY(32px); }
+      from { opacity:0; transform:translateY(28px); }
       to   { opacity:1; transform:translateY(0); }
     }
 
-    /* ── Yellow geometric diamond/triangle behind white card ── */
+    /* ── Crimson geo accent card behind white card ── */
     #login-geo-back {
       position: absolute;
-      top: -20px;
-      right: -20px;
+      top: -18px;
+      right: -18px;
       width: 100%;
       height: 100%;
-      background: linear-gradient(145deg, #00bfa5 0%, #00695c 100%);
+      background: linear-gradient(145deg, #C0392B 0%, #8B1A1A 100%);
       border-radius: 1.5rem;
-      transform: rotate(6deg);
+      transform: rotate(5deg);
       z-index: 0;
-      box-shadow: 0 20px 50px rgba(0, 105, 92, .45);
+      box-shadow: 0 20px 50px rgba(192,57,43,.35);
     }
 
     /* ── White main card ── */
@@ -285,22 +299,23 @@
       background: #ffffff;
       border-radius: 1.5rem;
       padding: 3.5rem 2.5rem 5.5rem;
-      min-height: 600px;
+      min-height: 560px;
       display: flex;
       flex-direction: column;
       justify-content: center;
-      box-shadow: 0 20px 60px rgba(0,0,0,.18), 0 4px 16px rgba(0,0,0,.1);
+      box-shadow: 0 8px 40px rgba(192,57,43,.12), 0 2px 12px rgba(0,0,0,.08);
+      border: 1px solid rgba(192,57,43,.10);
       overflow: visible;
     }
 
-    /* ── Logo top-left ── */
+    /* ── Logo ── */
     #login-logo-wrap {
-      width: 80px;
-      height: 80px;
+      width: 82px;
+      height: 82px;
       border-radius: 50%;
       background: #fff;
-      border: 3px solid #e2e8f0;
-      box-shadow: 0 4px 14px rgba(0, 105, 92, .45);
+      border: 3px solid rgba(192,57,43,.20);
+      box-shadow: 0 4px 18px rgba(192,57,43,.25);
       overflow: hidden;
       margin-bottom: 2rem;
       display: flex;
@@ -314,22 +329,36 @@
       border-radius: 50%;
     }
 
+    /* ── Welcome heading ── */
+    #login-welcome {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: #8B1A1A;
+      margin-bottom: .3rem;
+      letter-spacing: -.01em;
+    }
+    #login-subtitle {
+      font-size: .82rem;
+      color: #94a3b8;
+      margin-bottom: 2rem;
+    }
+
     /* ── Underline inputs ── */
     .login-field {
       display: flex;
       align-items: center;
       gap: .6rem;
-      border-bottom: 1.5px solid #cbd5e1;
+      border-bottom: 1.5px solid #e2e8f0;
       margin-bottom: 1.8rem;
       padding-bottom: .4rem;
       transition: border-color .2s;
     }
     .login-field:focus-within {
-      border-color: #00897b;
+      border-color: #C0392B;
     }
     .login-field .lf-icon {
       font-size: 1rem;
-      color: #00897b;
+      color: #C0392B;
       flex-shrink: 0;
     }
     .login-field input {
@@ -362,12 +391,12 @@
       justify-content: space-between;
       width: 100%;
       background: transparent;
-      border: 2px solid #00897b;
+      border: 2px solid #C0392B;
       border-radius: 999px;
       padding: .7rem 1.25rem .7rem 1.5rem;
       font-size: .9rem;
       font-weight: 700;
-      color: #00695c;
+      color: #C0392B;
       letter-spacing: .06em;
       cursor: pointer;
       transition: all .2s ease;
@@ -376,7 +405,7 @@
     #login-btn .btn-arrow {
       width: 30px; height: 30px;
       border-radius: 50%;
-      background: #00897b;
+      background: #C0392B;
       display: flex; align-items: center; justify-content: center;
       font-size: 1rem;
       color: #fff;
@@ -384,24 +413,25 @@
       flex-shrink: 0;
     }
     #login-btn:hover {
-      background: #e0f2f1 !important;
-      border-color: #00695c !important;
+      background: #fdecea !important;
+      border-color: #8B1A1A !important;
+      color: #8B1A1A !important;
     }
-    #login-btn:hover .btn-arrow { background: #00695c; }
+    #login-btn:hover .btn-arrow { background: #8B1A1A; }
     #login-btn:active { transform: scale(.98); }
 
-    /* ── Red "Admin Login" badge ── */
+    /* ── Admin Login badge ── */
     #login-admin-badge {
       position: absolute;
       bottom: -14px;
       right: 24px;
-      background: linear-gradient(135deg, #00897b, #00695c);
+      background: linear-gradient(135deg, #C0392B, #8B1A1A);
       color: #fff;
       font-size: .82rem;
       font-weight: 700;
       padding: .45rem 1.2rem;
       border-radius: 999px;
-      box-shadow: 0 4px 14px rgba(192,57,43,.45);
+      box-shadow: 0 4px 14px rgba(192,57,43,.40);
       z-index: 2;
       white-space: nowrap;
     }

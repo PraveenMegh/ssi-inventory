@@ -304,85 +304,134 @@ const SSIEmployees = (() => {
         const text = await file.text();
         rows = text.split('\n').map(r => r.split(',').map(c => c.trim().replace(/^"|"$/g,'')));
       } else {
-        if (typeof XLSX === 'undefined') { SSIApp.toast('Excel library not loaded!'); return; }
-        const ab   = await file.arrayBuffer();
-        const wb   = XLSX.read(ab, { type:'array' });
-        const ws   = wb.Sheets[wb.SheetNames[0]];
-        rows       = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+        if (typeof XLSX === 'undefined') { SSIApp.toast('❌ Excel library not loaded. Please refresh the page.'); return; }
+        const ab = await file.arrayBuffer();
+        const wb = XLSX.read(ab, { type:'array', cellDates: true });   // cellDates:true → JS Date objects for date cells
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        rows     = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
       }
 
-      if (rows.length < 2) { SSIApp.toast('No data rows found'); return; }
+      // Remove truly blank trailing rows
+      while (rows.length > 1 && rows[rows.length-1].every(c => c === '' || c == null)) {
+        rows.pop();
+      }
 
-      const header = rows[0].map(h => String(h).toLowerCase().trim());
+      if (rows.length < 2) { SSIApp.toast('❌ No data rows found in file'); return; }
+
+      const header = rows[0].map(h => String(h||'').toLowerCase().trim());
       const idx = {
-        code:    header.indexOf('emp_code'),
-        name:    header.indexOf('name'),
-        type:    header.indexOf('type'),
-        unit:    header.indexOf('unit_name'),
-        dept:    header.indexOf('department'),
-        desig:   header.indexOf('designation'),
-        join:    header.indexOf('join_date'),
+        code:     header.indexOf('emp_code'),
+        name:     header.indexOf('name'),
+        type:     header.indexOf('type'),
+        unit:     header.indexOf('unit_name'),
+        dept:     header.indexOf('department'),
+        desig:    header.indexOf('designation'),
+        join:     header.indexOf('join_date'),
         phone:    header.indexOf('phone'),
         relation: header.indexOf('relation_name'),
-        salary:  header.indexOf('monthly_salary'),
-        bankAc:  header.indexOf('bank_ac'),
-        bankIfsc:header.indexOf('bank_ifsc'),
-        bankName:header.indexOf('bank_name'),
-        notes:   header.indexOf('notes'),
+        salary:   header.indexOf('monthly_salary'),
+        bankAc:   header.indexOf('bank_ac'),
+        bankIfsc: header.indexOf('bank_ifsc'),
+        bankName: header.indexOf('bank_name'),
+        notes:    header.indexOf('notes'),
       };
 
-      if (idx.code<0 || idx.name<0 || idx.salary<0) {
-        SSIApp.toast('Template columns missing: emp_code, name, monthly_salary'); return;
+      if (idx.code<0 || idx.name<0) {
+        SSIApp.toast('❌ Missing columns: emp_code and name are required in header row'); return;
+      }
+
+      // ── Helper: safely read a cell value as a plain string ──
+      function cellStr(r, i) {
+        if (i < 0 || i >= r.length) return '';
+        const v = r[i];
+        if (v == null || v === '') return '';
+        if (v instanceof Date) {
+          // Convert Excel Date object → YYYY-MM-DD
+          const y  = v.getFullYear();
+          const m  = String(v.getMonth()+1).padStart(2,'0');
+          const d  = String(v.getDate()).padStart(2,'0');
+          return `${y}-${m}-${d}`;
+        }
+        return String(v).trim();
+      }
+
+      // ── Helper: safely read a number cell ──
+      function cellNum(r, i) {
+        if (i < 0 || i >= r.length) return 0;
+        const v = r[i];
+        if (v == null || v === '') return 0;
+        return parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
       }
 
       const st = SSIApp.getState();
       if (!st.employees) st.employees = [];
-      let added=0, skipped=0;
+      let added=0, updated=0, skipped=0;
+      const skipReasons = [];
 
       for (let i=1; i<rows.length; i++) {
         const r = rows[i];
-        if (!r[idx.code] && !r[idx.name]) continue;
-        const code = String(r[idx.code]||'').trim();
-        const empName = String(r[idx.name]||'').trim();
-        if (!code || !empName) { skipped++; continue; }
 
-        // Resolve unit by name
-        const unitName = String(r[idx.unit]||'').trim().toLowerCase();
-        const unit = (st.units||[]).find(u => u.name.toLowerCase()===unitName);
+        // Skip completely blank rows
+        if (r.every(c => c === '' || c == null)) continue;
 
-        const type = String(r[idx.type]||'WORKER').toUpperCase().includes('STAFF') ? 'STAFF' : 'WORKER';
+        const code    = cellStr(r, idx.code);
+        const empName = cellStr(r, idx.name);
 
-        const existing = st.employees.findIndex(e => e.emp_code===code);
+        if (!code && !empName) continue;           // blank row
+
+        if (!code)    { skipped++; skipReasons.push(`Row ${i+1}: missing emp_code`);    continue; }
+        if (!empName) { skipped++; skipReasons.push(`Row ${i+1}: missing name`);         continue; }
+
+        // Resolve unit by name (warn but don't skip if unit not found)
+        const unitName = cellStr(r, idx.unit).toLowerCase();
+        const unit     = (st.units||[]).find(u => u.name.toLowerCase() === unitName);
+        if (unitName && !unit) {
+          console.warn(`[SSI Import] Row ${i+1} (${code}): unit "${unitName}" not found in system — leaving blank`);
+        }
+
+        const type     = cellStr(r, idx.type).toUpperCase().includes('STAFF') ? 'STAFF' : 'WORKER';
+        const existing = st.employees.findIndex(e => e.emp_code === code);
+
         const entry = {
           id:             existing>=0 ? st.employees[existing].id : SSIApp.uid(),
           emp_code:       code,
           name:           empName,
           type,
           unit_id:        unit?.id || '',
-          department:     String(r[idx.dept]||'').trim(),
-          designation:    String(r[idx.desig]||'').trim(),
-          join_date:      String(r[idx.join]||'').trim(),
-          phone:          String(r[idx.phone]||'').trim(),
-          relation_name:  idx.relation>=0 ? String(r[idx.relation]||'').trim() : '',
-          monthly_salary: parseFloat(r[idx.salary])||0,
-          bank_ac:        String(r[idx.bankAc]||'').trim(),
-          bank_ifsc:      String(r[idx.bankIfsc]||'').trim(),
-          bank_name:      String(r[idx.bankName]||'').trim(),
-          notes:          String(r[idx.notes]||'').trim(),
+          department:     cellStr(r, idx.dept),
+          designation:    cellStr(r, idx.desig),
+          join_date:      cellStr(r, idx.join),
+          phone:          cellStr(r, idx.phone),
+          relation_name:  cellStr(r, idx.relation),
+          monthly_salary: idx.salary>=0 ? cellNum(r, idx.salary) : 0,
+          bank_ac:        cellStr(r, idx.bankAc),
+          bank_ifsc:      cellStr(r, idx.bankIfsc),
+          bank_name:      cellStr(r, idx.bankName),
+          notes:          cellStr(r, idx.notes),
           active:         true,
-          created_at:     existing>=0 ? (st.employees[existing].created_at||new Date().toISOString()) : new Date().toISOString(),
+          created_at:     existing>=0 ? (st.employees[existing].created_at || new Date().toISOString()) : new Date().toISOString(),
           updated_at:     new Date().toISOString(),
         };
 
-        if (existing>=0) { st.employees[existing] = entry; }
+        if (existing>=0) { st.employees[existing] = entry; updated++; }
         else             { st.employees.push(entry); added++; }
       }
 
       await SSIApp.saveState(st);
-      SSIApp.toast(`✅ Import done — ${added} added, ${skipped} skipped`);
+
+      let msg = `✅ Import done — ${added} added, ${updated} updated`;
+      if (skipped>0) msg += `, ${skipped} skipped`;
+      SSIApp.toast(msg, 'success');
+
+      if (skipReasons.length > 0) {
+        console.warn('[SSI Import] Skipped rows:', skipReasons);
+        SSIApp.toast(`⚠️ ${skipped} row(s) skipped — check console for details`, 'warning');
+      }
+
       refresh(document.getElementById('page-area'));
     } catch(err) {
-      SSIApp.toast(`Import failed: ${err.message}`);
+      console.error('[SSI Import] Error:', err);
+      SSIApp.toast(`❌ Import failed: ${err.message}`);
     }
     input.value = '';
   }

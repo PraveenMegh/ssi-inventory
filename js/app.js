@@ -74,6 +74,31 @@ const SSIApp = {
   },
 
   // ── Ensure default users always exist ─────────────────────
+  // ── Deduplicate users (can be called anytime) ─────────────────
+  _dedupUsers() {
+    if (!this.state.users || !Array.isArray(this.state.users)) return false;
+    const seen = new Set();
+    const deduped = [];
+    let hadDups = false;
+    
+    for (const u of this.state.users) {
+      if (!u.id) continue; // Skip invalid entries
+      if (!seen.has(u.id)) {
+        seen.add(u.id);
+        deduped.push(u);
+      } else {
+        hadDups = true;
+        console.warn('[SSI] Removed duplicate user:', u.username, u.id);
+      }
+    }
+    
+    if (hadDups) {
+      this.state.users = deduped;
+      console.log('[SSI] Deduped users array:', this.state.users.length, 'unique users');
+    }
+    return hadDups;
+  },
+
   _ensureUsers() {
     if (!this.state.users) this.state.users = [];
     let changed = false;
@@ -84,13 +109,7 @@ const SSIApp = {
     }
 
     // Deduplicate users by id (safety net against double-save bug)
-    const seen = new Set();
-    const deduped = [];
-    for (const u of this.state.users) {
-      if (!seen.has(u.id)) { seen.add(u.id); deduped.push(u); }
-      else { changed = true; console.warn('[SSI] Removed duplicate user id:', u.id); }
-    }
-    this.state.users = deduped;
+    if (this._dedupUsers()) changed = true;
 
     // Ensure every default user exists (add if missing)
     for (const du of this._DEFAULT_USERS) {

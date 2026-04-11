@@ -66,7 +66,7 @@ const SSIProducts = (() => {
         <div style="overflow-x:auto;">
           <table>
             <thead><tr>
-              <th>SKU</th><th>Product Name</th><th>UoM</th><th>Pack Sizes</th><th>Carton/Bag Std</th><th>Reorder</th>
+              <th>SKU</th><th>Product Name</th><th>UoM</th><th>Pack Sizes</th><th>Carton/Bag Std</th><th>Reorder</th><th style="text-align:right;">MRP (₹)</th><th style="text-align:right;">Sell Price (₹)</th>
               ${st.units.filter(u=>u.active).map(u=>`<th style="text-align:center;">${u.name}<br><span style="font-size:10px;">Stock</span></th>`).join('')}
               <th>Status</th>${SSIApp.hasRole('ADMIN')?'<th>Actions</th>':''}
             </tr></thead>
@@ -86,6 +86,8 @@ const SSIProducts = (() => {
                   <td style="font-size:12px;color:#64748b;">${packLabels||'—'}</td>
                   <td style="font-size:13px;">${p.carton_std>0?p.carton_std+' KG/ctn/bag':'—'}</td>
                   <td style="font-size:13px;">${p.reorder_level||'—'}</td>
+                  <td style="text-align:right;font-size:13px;font-weight:600;color:#d97706;">${p.default_rate>0?'₹'+SSIApp.moneyFmt(p.default_rate):'—'}</td>
+                  <td style="text-align:right;font-size:13px;font-weight:600;color:#16a34a;">${p.selling_price>0?'₹'+SSIApp.moneyFmt(p.selling_price):'—'}</td>
                   ${unitStocks}
                   <td><span class="badge ${isLowTotal?'badge-low':'badge-ok'}">${isLowTotal?'⚠️ LOW':'✅ OK'}</span></td>
                   ${SSIApp.hasRole('ADMIN')?`<td style="white-space:nowrap;">
@@ -139,8 +141,14 @@ const SSIProducts = (() => {
             <input id="p-carton" type="number" min="0" step="0.001" value="${p?.carton_std||''}" placeholder="e.g. 50 KG per Bag/Carton (0 = N/A)">
           </div>
           <div>
-            <label>Default Rate (₹ per KG/Unit)</label>
-            <input id="p-rate" type="number" min="0" step="0.01" value="${p?.default_rate||''}" placeholder="e.g. 45.50">
+            <label>MRP — Maximum Retail Price (₹ per KG/Unit)</label>
+            <input id="p-rate" type="number" min="0" step="0.01" value="${p?.default_rate||''}" placeholder="e.g. 55.00"
+              style="border-color:#d97706;" title="Maximum Retail Price — printed on the product label">
+          </div>
+          <div>
+            <label>Selling Price (₹ per KG/Unit) <span style="font-size:11px;color:#64748b;">— actual sale price</span></label>
+            <input id="p-selling" type="number" min="0" step="0.01" value="${p?.selling_price||''}" placeholder="e.g. 45.50"
+              style="border-color:#16a34a;" title="Actual selling price to customers">
           </div>
         </div>
         <div style="margin-top:16px;">
@@ -165,17 +173,18 @@ const SSIProducts = (() => {
     const desc = document.getElementById('p-desc').value.trim();
     const reorder = parseFloat(document.getElementById('p-reorder').value)||0;
     const carton_std = parseFloat(document.getElementById('p-carton').value)||0;
-    const default_rate = parseFloat(document.getElementById('p-rate').value)||0;
+    const default_rate   = parseFloat(document.getElementById('p-rate').value)||0;
+    const selling_price  = parseFloat(document.getElementById('p-selling').value)||0;
     const pack_sizes = [...document.querySelectorAll('#pack-sizes-container input:checked')].map(c=>c.value);
 
     const st = SSIApp.getState();
     if (id) {
       const idx = st.products.findIndex(p=>p.id===id);
-      if (idx>=0) Object.assign(st.products[idx],{name,uom,description:desc,reorder_level:reorder,carton_std,default_rate,pack_sizes,updated_at:new Date().toISOString()});
+      if (idx>=0) Object.assign(st.products[idx],{name,uom,description:desc,reorder_level:reorder,carton_std,default_rate,selling_price,pack_sizes,updated_at:new Date().toISOString()});
       SSIApp.toast('Product updated ✅');
     } else {
       const sku = SSIApp.nextSKU(st);
-      st.products.push({id:SSIApp.uid(),sku,name,uom,description:desc,reorder_level:reorder,carton_std,default_rate,pack_sizes,active:true,created_at:new Date().toISOString()});
+      st.products.push({id:SSIApp.uid(),sku,name,uom,description:desc,reorder_level:reorder,carton_std,default_rate,selling_price,pack_sizes,active:true,created_at:new Date().toISOString()});
       SSIApp.toast('Product added ✅');
     }
     SSIApp.saveState(st);
@@ -207,7 +216,7 @@ const SSIProducts = (() => {
 
   function downloadTemplate() {
     SSIApp.excelDownload([
-      ['Product Name','UoM (KG/NOS)','Description','Reorder Level','Carton/Bag Std (KG)','Default Rate','Pack Sizes (comma-separated)'],
+      ['Product Name','UoM (KG/NOS)','Description','Reorder Level','Carton/Bag Std (KG)','MRP (Default Rate)','Selling Price','Pack Sizes (comma-separated)'],
       ['Calcium Carbonate 1KG','KG','White powder','100','30','45.50','1 KG,30 KG,50 KG'],
       ['Sample Product','KG','Description here','50','0','25','500g,1 KG'],
     ],'Products','SSI_Products_Template');
@@ -229,7 +238,8 @@ const SSIProducts = (() => {
           description:(r['Description']||'').toString(),
           reorder_level:parseFloat(r['Reorder Level'])||0,
           carton_std:parseFloat(r['Carton/Bag Std (KG)'])||0,
-          default_rate:parseFloat(r['Default Rate'])||0,
+          default_rate:parseFloat(r['MRP (Default Rate)']||r['Default Rate'])||0,
+          selling_price:parseFloat(r['Selling Price'])||0,
           pack_sizes:(r['Pack Sizes (comma-separated)']||'').toString().split(',').map(s=>s.trim()).filter(Boolean),
           active:true,created_at:new Date().toISOString()
         });
@@ -245,9 +255,9 @@ const SSIProducts = (() => {
 
   function exportExcel() {
     const st = SSIApp.getState();
-    const rows = [['SKU','Product Name','UoM','Description','Reorder Level','Carton/Bag Std (KG)','Default Rate','Pack Sizes']];
+    const rows = [['SKU','Product Name','UoM','Description','Reorder Level','Carton/Bag Std (KG)','MRP (Default Rate)','Selling Price','Pack Sizes']];
     st.products.filter(p=>p.active).forEach(p=>{
-      rows.push([p.sku,p.name,p.uom||'KG',p.description||'',p.reorder_level||0,p.carton_std||0,p.default_rate||0,(p.pack_sizes||[]).join(',')]);
+      rows.push([p.sku,p.name,p.uom||'KG',p.description||'',p.reorder_level||0,p.carton_std||0,p.default_rate||0,p.selling_price||0,(p.pack_sizes||[]).join(',')]);
     });
     SSIApp.excelDownload(rows,'Products','SSI_Products_Export');
     SSIApp.toast('Products exported ✅');

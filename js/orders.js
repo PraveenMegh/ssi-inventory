@@ -362,9 +362,12 @@ const SSIOrders = (() => {
     const prod = st.products.find(p=>p.id===productId);
     if (!prod) return;
 
-    // Auto-fill rate
+    // Auto-fill rate: prefer selling_price, fallback to default_rate (MRP)
     const rateEl = document.querySelector(`.item-rate[data-idx="${idx}"]`);
-    if (rateEl && !rateEl.value && prod.default_rate) rateEl.value = prod.default_rate;
+    if (rateEl && !rateEl.value) {
+      const autoRate = prod.selling_price || prod.default_rate || '';
+      if (autoRate) rateEl.value = autoRate;
+    }
 
     // Refresh bag-size dropdown with new product's pack_sizes
     const mode   = document.querySelector(`.item-pack-mode[data-idx="${idx}"]`)?.value || 'BAG';

@@ -3,8 +3,9 @@ const SSIInventory = (() => {
   const ENTRY_TYPES = [
     { value:'OPENING',     label:'📂 Opening Stock' },
     { value:'IN',          label:'📥 Stock IN (Received)' },
-    { value:'OUT',         label:'📤 Stock OUT (Issued)' },
-    { value:'ADJUST',      label:'🔧 Adjustment' },
+    { value:'OUT',         label:'📤 Stock OUT (Dispatched/Sold)' },
+    { value:'ISSUE',       label:'🔧 Internal Issue (Consumable)' },
+    { value:'ADJUST',      label:'⚖️ Adjustment' },
     { value:'TRANSFER_OUT',label:'↗️ Transfer OUT' },
     { value:'TRANSFER_IN', label:'↙️ Transfer IN' },
   ];
@@ -37,7 +38,7 @@ const SSIInventory = (() => {
     ledgerAsc.forEach(t => {
       const key = `${t.unit_id}|${t.product_id}`;
       if (!balanceMap[key]) balanceMap[key] = 0;
-      const isOut = ['OUT','TRANSFER_OUT'].includes(t.type);
+      const isOut = ['OUT','TRANSFER_OUT','ISSUE'].includes(t.type);
       balanceMap[key] += isOut ? -(t.qty||0) : (t.qty||0);
       t._runningBal = balanceMap[key];  // attach to entry object (temp)
     });
@@ -113,15 +114,15 @@ const SSIInventory = (() => {
 
   function renderRows(ledger, st) {
     if (!ledger.length) return `<tr><td colspan="9" style="text-align:center;padding:40px;color:#94a3b8;">No inventory entries yet. Add your first entry!</td></tr>`;
-    const typeColors     = {IN:'#dcfce7',OUT:'#fee2e2',OPENING:'#FDECEA',ADJUST:'#fef3c7',TRANSFER_OUT:'#fce7f3',TRANSFER_IN:'#ede9fe'};
-    const typeTextColors = {IN:'#166534',OUT:'#991b1b',OPENING:'#D35400',ADJUST:'#92400e',TRANSFER_OUT:'#9d174d',TRANSFER_IN:'#5b21b6'};
+    const typeColors     = {IN:'#dcfce7',OUT:'#fee2e2',OPENING:'#FDECEA',ADJUST:'#fef3c7',TRANSFER_OUT:'#fce7f3',TRANSFER_IN:'#ede9fe',ISSUE:'#ede9fe'};
+    const typeTextColors = {IN:'#166534',OUT:'#991b1b',OPENING:'#D35400',ADJUST:'#92400e',TRANSFER_OUT:'#9d174d',TRANSFER_IN:'#5b21b6',ISSUE:'#6d28d9'};
     return ledger.map(t => {
       const prod   = st.products.find(p=>p.id===t.product_id);
       const unit   = st.units.find(u=>u.id===t.unit_id);
       const user   = st.users.find(u=>u.id===t.user_id);
       const bg     = typeColors[t.type]     || '#f1f5f9';
       const tc     = typeTextColors[t.type] || '#374151';
-      const isOut  = ['OUT','TRANSFER_OUT'].includes(t.type);
+      const isOut  = ['OUT','TRANSFER_OUT','ISSUE'].includes(t.type);
       const bal    = t._runningBal ?? 0;
       const balNeg = bal < 0;
       // Closing balance cell styling
@@ -140,7 +141,13 @@ const SSIInventory = (() => {
             ${balIcon}${SSIApp.qtyFmt(Math.abs(bal))} ${prod?.uom||'KG'}
           </span>
         </td>
-        <td style="font-size:12px;color:#64748b;max-width:150px;">${t.note||'—'}</td>
+        <td style="font-size:12px;color:#64748b;max-width:180px;">
+          ${t.type==='ISSUE' && t.issued_to
+            ? `<div style="font-weight:600;color:#6d28d9;">${t.issued_to}</div>
+               <div style="color:#7c3aed;font-size:11px;">${t.purpose||'—'}</div>
+               ${t.department?`<div style="color:#94a3b8;font-size:10px;">${t.department}</div>`:''}`
+            : (t.note||'—')}
+        </td>
         <td style="font-size:12px;color:#94a3b8;">${user?.name||t.user_name||'—'}</td>
         
       </tr>`;
@@ -168,6 +175,13 @@ const SSIInventory = (() => {
     if (cnt) cnt.textContent = `Showing: ${visible} entries`;
   }
 
+  function _onTypeChange(type) {
+    const issueFields = document.getElementById('inv-issue-fields');
+    if (issueFields) {
+      issueFields.style.display = (type === 'ISSUE') ? 'block' : 'none';
+    }
+  }
+
   function openEntryModal(prefillProductId, prefillUnitId) {
     const st = SSIApp.getState();
     const html = `
@@ -183,7 +197,7 @@ const SSIInventory = (() => {
           </div>
           <div>
             <label>Entry Type *</label>
-            <select id="inv-type">
+            <select id="inv-type" onchange="SSIInventory._onTypeChange(this.value)">
               ${ENTRY_TYPES.map(t=>`<option value="${t.value}">${t.label}</option>`).join('')}
             </select>
           </div>
@@ -230,6 +244,33 @@ const SSIInventory = (() => {
             <span style="font-size:13px;color:#16a34a;font-weight:600;">Total Quantity</span><br>
             <span id="inv-total-qty" style="font-size:28px;font-weight:900;color:#16a34a;">0.000</span>
             <span id="inv-total-uom" style="font-size:16px;color:#16a34a;font-weight:600;"> KG</span>
+          </div>
+        </div>
+
+        <!-- ISSUE-specific fields (shown only when type = ISSUE) -->
+        <div id="inv-issue-fields" style="display:none;margin-top:16px;padding:16px;background:#f5f3ff;border:1.5px solid #c4b5fd;border-radius:10px;">
+          <div style="font-weight:700;font-size:13px;color:#6d28d9;margin-bottom:12px;">🔧 Internal Issue Details</div>
+          <div class="form-grid form-grid-2">
+            <div>
+              <label>Issued To (Employee) *</label>
+              <select id="inv-issued-emp" style="border-color:#c4b5fd;">
+                <option value="">— Select Employee —</option>
+                ${(st.employees||[]).filter(e=>e.active!==false).map(e=>`<option value="${e.id}">${e.name} (${e.emp_code})</option>`).join('')}
+              </select>
+              <div style="font-size:11px;color:#7c3aed;margin-top:4px;">Or type a name below if not in employee list</div>
+            </div>
+            <div>
+              <label>Or Enter Name (free text)</label>
+              <input id="inv-issued-name" placeholder="e.g. Raju - Mechanic / Maintenance Team" style="border-color:#c4b5fd;">
+            </div>
+            <div>
+              <label>Purpose / Reason *</label>
+              <input id="inv-purpose" placeholder="e.g. Machine repair, Safety gloves, Cleaning" style="border-color:#c4b5fd;">
+            </div>
+            <div>
+              <label>Department (optional)</label>
+              <input id="inv-dept" placeholder="e.g. Production, Maintenance, Admin" style="border-color:#c4b5fd;">
+            </div>
           </div>
         </div>
 
@@ -493,6 +534,17 @@ const SSIInventory = (() => {
     const productId = document.getElementById('inv-product')?.value;
     const note      = document.getElementById('inv-note')?.value?.trim() || '';
     const mode      = document.getElementById('inv-pack-mode')?.value;
+    // ISSUE-specific fields
+    const isIssue   = (type === 'ISSUE');
+    const issuedEmpId  = isIssue ? (document.getElementById('inv-issued-emp')?.value || '') : '';
+    const issuedName   = isIssue ? (document.getElementById('inv-issued-name')?.value?.trim() || '') : '';
+    const purpose      = isIssue ? (document.getElementById('inv-purpose')?.value?.trim() || '') : '';
+    const dept         = isIssue ? (document.getElementById('inv-dept')?.value?.trim() || '') : '';
+    // Validate ISSUE fields
+    if (isIssue && !purpose) {
+      SSIApp.toast('❌ Please enter a Purpose/Reason for the internal issue', 'error');
+      return;
+    }
 
     if (!date || !type || !unitId || !productId) {
       SSIApp.toast('Please fill all required fields (Date, Type, Unit, Product)', 'error');
@@ -514,7 +566,7 @@ const SSIInventory = (() => {
     }
 
     // Check OUT doesn't exceed stock
-    if (['OUT','TRANSFER_OUT'].includes(type)) {
+    if (['OUT','TRANSFER_OUT','ISSUE'].includes(type)) {
       const current = SSIApp.getStock(productId, unitId);
       if (qty > current) {
         SSIApp.toast(`Insufficient stock! Current: ${SSIApp.qtyFmt(current)} KG`, 'error');
@@ -526,6 +578,11 @@ const SSIInventory = (() => {
     const st   = SSIApp.getState();
     const prod = st.products.find(p=>p.id===productId);
 
+    // Resolve issued_to name: prefer employee dropdown, fallback to free text
+    const st2 = SSIApp.getState();
+    const issuedEmp = issuedEmpId ? (st2.employees||[]).find(e=>e.id===issuedEmpId) : null;
+    const issued_to = issuedEmp ? `${issuedEmp.name} (${issuedEmp.emp_code})` : (issuedName || '');
+
     const entry = {
       id: SSIApp.uid(),
       date,
@@ -536,6 +593,9 @@ const SSIInventory = (() => {
       pack_desc: getPackDesc(),
       qty,
       note,
+      issued_to,
+      purpose,
+      department: dept,
       user_id: user?.id,
       user_name: user?.name,
       created_at: new Date().toISOString()
@@ -562,7 +622,7 @@ const SSIInventory = (() => {
 
   function exportExcel() {
     const st = SSIApp.getState();
-    const rows = [['Date','Type','Unit','Product','SKU','Pack Mode','Pack Desc','Qty','UoM','Note','By']];
+    const rows = [['Date','Type','Unit','Product','SKU','Pack Mode','Pack Desc','Qty','UoM','Note','Issued To','Purpose','Department','By']];
     [...st.inventory].sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(t => {
       const prod = st.products.find(p=>p.id===t.product_id);
       const unit = st.units.find(u=>u.id===t.unit_id);
@@ -570,7 +630,7 @@ const SSIInventory = (() => {
       rows.push([
         t.date, t.type, unit?.name||'', prod?.name||'', prod?.sku||'',
         t.pack_mode||'', t.pack_desc||'', t.qty||0, prod?.uom||'KG',
-        t.note||'', user?.name||t.user_name||''
+        t.note||'', t.issued_to||'', t.purpose||'', t.department||'', user?.name||t.user_name||''
       ]);
     });
     SSIApp.excelDownload(rows, 'Inventory', 'SSI_Inventory_Ledger');
@@ -618,7 +678,7 @@ const SSIInventory = (() => {
         if (!unit) { errors.push(`Row ${idx+2}: Unit "${unitName}" not found`); return; }
         const prod = st.products.find(p => p.name.toLowerCase() === prodName.toLowerCase() && p.active);
         if (!prod) { errors.push(`Row ${idx+2}: Product "${prodName}" not found`); return; }
-        const validTypes = ['IN','OUT','OPENING','ADJUST','TRANSFER_IN','TRANSFER_OUT'];
+        const validTypes = ['IN','OUT','OPENING','ADJUST','TRANSFER_IN','TRANSFER_OUT','ISSUE'];
         if (!validTypes.includes(typeRaw)) { errors.push(`Row ${idx+2}: Invalid type "${typeRaw}"`); return; }
 
         let qty = 0, pack_desc = '';
@@ -693,7 +753,7 @@ const SSIInventory = (() => {
   }
 
   return {
-    render, refresh, applyFilter,
+    render, refresh, applyFilter, _onTypeChange,
     openEntryModal, onProductUnitChange, onPackModeChange, calcTotal,
     saveEntry, deleteEntry, clearInventory,
     exportExcel, downloadTemplate, importExcel

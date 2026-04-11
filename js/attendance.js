@@ -300,60 +300,96 @@ const SSIAttendance = (() => {
   }
 
   /* ── Bulk Entry (mark all employees for a date) ──────────── */
-  function openBulkEntry() {
-    const st    = SSIApp.getState();
-    const today = new Date().toISOString().slice(0,10);
-    const emps  = (st.employees||[]).filter(e=>e.active!==false);
-
-    const rows = emps.map(e => {
-      const rec = (st.attendance||[]).find(a=>a.emp_id===e.id&&a.date===today);
-      const s   = rec?.status||'P';
-      return `<tr>
-        <td><b>${e.name}</b><br><span style="font-size:11px;color:#64748b;">${e.emp_code} · ${e.type}</span></td>
-        <td>
-          <select id="bulk-s-${e.id}" style="width:120px;">
+  function _buildBulkRows(date) {
+    const st   = SSIApp.getState();
+    const emps = (st.employees||[]).filter(e=>e.active!==false);
+    return emps.map(e => {
+      const rec = (st.attendance||[]).find(a=>a.emp_id===e.id && a.date===date);
+      const s   = rec?.status || 'P';
+      return `<tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:10px 8px;">
+          <div style="font-weight:600;font-size:13px;color:#111827;">${e.name}</div>
+          <div style="font-size:11px;color:#64748b;">${e.emp_code} · ${e.type}</div>
+        </td>
+        <td style="padding:10px 8px;">
+          <select id="bulk-s-${e.id}" style="width:140px;padding:6px;border:1.5px solid #e2e8f0;border-radius:6px;font-size:13px;">
             ${Object.entries(STATUS_MAP).map(([k,v])=>`<option value="${k}" ${s===k?'selected':''}>${v.short} — ${v.label}</option>`).join('')}
           </select>
         </td>
-        <td><input type="number" id="bulk-ot-${e.id}" min="0" max="24" step="0.5" value="${rec?.ot_hours||0}" style="width:70px;" placeholder="OT hrs"></td>
+        <td style="padding:10px 8px;">
+          <input type="number" id="bulk-ot-${e.id}"
+            min="0" max="24" step="0.5"
+            value="${rec?.ot_hours||''}"
+            placeholder="0"
+            title="Overtime hours (extra hours worked beyond normal shift)"
+            style="width:72px;padding:6px;border:1.5px solid #e2e8f0;border-radius:6px;font-size:13px;text-align:center;">
+        </td>
       </tr>`;
     }).join('');
+  }
+
+  function openBulkEntry() {
+    const today = new Date().toISOString().slice(0,10);
 
     SSIApp.modal(`
-      <h3 style="margin-bottom:12px;">📋 Bulk Attendance Entry</h3>
-      <div style="margin-bottom:12px;">
-        <label>Date</label>
-        <input type="date" id="bulk-date" value="${today}" style="width:200px;">
-      </div>
-      <div style="overflow-y:auto;max-height:50vh;">
-        <table style="width:100%;border-collapse:collapse;font-size:13px;">
-          <thead><tr style="background:#f8fafc;">
-            <th style="padding:8px;text-align:left;">Employee</th>
-            <th style="padding:8px;">Status</th>
-            <th style="padding:8px;">OT Hours</th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
-        <button class="btn btn-secondary" onclick="SSIApp.closeModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="SSIAttendance.saveBulk(${JSON.stringify(emps.map(e=>e.id))})">💾 Save All</button>
+      <div style="padding:24px;">
+        <h3 style="margin:0 0 20px;font-size:18px;font-weight:700;color:#111827;">📋 Bulk Attendance Entry</h3>
+
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:12px 16px;background:#f8fafc;border-radius:10px;">
+          <label style="font-weight:600;font-size:13px;color:#374151;">📅 Date:</label>
+          <input type="date" id="bulk-date" value="${today}"
+            onchange="document.getElementById('bulk-tbody').innerHTML=SSIAttendance._buildBulkRows(this.value)"
+            style="padding:7px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;">
+          <span style="font-size:12px;color:#94a3b8;margin-left:4px;">(changing date reloads existing attendance)</span>
+        </div>
+
+        <div style="overflow-y:auto;max-height:52vh;border:1px solid #e2e8f0;border-radius:10px;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="background:#C0392B;position:sticky;top:0;z-index:2;">
+                <th style="padding:10px 8px;text-align:left;color:#fff;font-weight:600;">Employee</th>
+                <th style="padding:10px 8px;color:#fff;font-weight:600;">Status</th>
+                <th style="padding:10px 8px;color:#fff;font-weight:600;" title="Overtime hours worked beyond normal shift">OT Hrs <span style="font-size:10px;opacity:0.8;">(optional)</span></th>
+              </tr>
+            </thead>
+            <tbody id="bulk-tbody">
+              ${_buildBulkRows(today)}
+            </tbody>
+          </table>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
+          <button class="btn btn-secondary" onclick="SSIApp.closeModal()">Cancel</button>
+          <button class="btn btn-primary" id="bulk-save-btn" onclick="SSIAttendance.saveBulk()">💾 Save All</button>
+        </div>
       </div>`);
   }
 
-  async function saveBulk(empIds) {
+  async function saveBulk() {
     const date = document.getElementById('bulk-date')?.value;
-    if (!date) { SSIApp.toast('Select a date'); return; }
+    if (!date) { SSIApp.toast('❌ Please select a date'); return; }
+
+    // Disable save button to prevent double-click
+    const saveBtn = document.getElementById('bulk-save-btn');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Saving…'; }
 
     const st = SSIApp.getState();
     if (!st.attendance) st.attendance = [];
 
+    // Collect all active employee IDs from the rendered rows
+    const emps = (st.employees||[]).filter(e=>e.active!==false);
+
     let saved = 0;
-    empIds.forEach(empId => {
-      const status   = document.getElementById(`bulk-s-${empId}`)?.value || 'A';
-      const otHours  = parseFloat(document.getElementById(`bulk-ot-${empId}`)?.value) || 0;
-      const idx = st.attendance.findIndex(a=>a.emp_id===empId&&a.date===date);
-      const entry = {
+    emps.forEach(emp => {
+      const empId  = emp.id;
+      const selEl  = document.getElementById(`bulk-s-${empId}`);
+      const otEl   = document.getElementById(`bulk-ot-${empId}`);
+      if (!selEl) return;   // employee row not rendered — skip
+
+      const status  = selEl.value || 'P';
+      const otHours = parseFloat(otEl?.value) || 0;
+      const idx     = st.attendance.findIndex(a=>a.emp_id===empId&&a.date===date);
+      const entry   = {
         id:         idx>=0 ? st.attendance[idx].id : SSIApp.uid(),
         emp_id:     empId,
         date,
@@ -369,7 +405,7 @@ const SSIAttendance = (() => {
     });
 
     await SSIApp.saveState(st);
-    SSIApp.toast(`✅ Attendance saved for ${saved} employees on ${date}`);
+    SSIApp.toast(`✅ Attendance saved for ${saved} employees on ${date}`, 'success');
     SSIApp.closeModal();
     applyFilter();
   }
@@ -490,7 +526,7 @@ const SSIAttendance = (() => {
 
   return {
     render, refresh, applyFilter,
-    openBulkEntry, saveBulk,
+    openBulkEntry, saveBulk, _buildBulkRows,
     quickEdit, _setStatus, _saveQuickEdit,
     deleteRecord,
     downloadTemplate, importFile, exportExcel

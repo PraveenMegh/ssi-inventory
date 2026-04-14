@@ -27,14 +27,22 @@ const SSIEmployees = (() => {
     area.innerHTML = `
       <div class="page-header">
         <h2 class="page-title">👥 Employee Master</h2>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
           <button class="btn btn-secondary btn-sm" onclick="SSIEmployees.downloadTemplate()">⬇️ Template</button>
           <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
             📥 Import Excel/CSV
             <input type="file" accept=".xlsx,.xls,.csv" style="display:none;" onchange="SSIEmployees.importFile(this)">
           </label>
           <button class="btn btn-secondary btn-sm" onclick="SSIEmployees.exportExcel()">📤 Export</button>
-          ${isAdmin ? `<button class="btn btn-primary" onclick="SSIEmployees.openForm()">+ Add Employee</button>` : ''}
+          ${isAdmin ? `
+            <button class="btn btn-danger btn-sm" id="emp-delete-selected-btn" style="display:none;" onclick="SSIEmployees.deleteSelected()">
+              🗑️ Delete Selected (<span id="emp-sel-count">0</span>)
+            </button>
+            <button class="btn btn-danger btn-sm" onclick="SSIEmployees.deleteAll()" title="Delete ALL employees from the system">
+              ⚠️ Delete All
+            </button>
+            <button class="btn btn-primary" onclick="SSIEmployees.openForm()">+ Add Employee</button>
+          ` : ''}
         </div>
       </div>
 
@@ -73,6 +81,7 @@ const SSIEmployees = (() => {
       <div class="card" style="overflow-x:auto;">
         <table id="emp-table">
           <thead><tr>
+            ${isAdmin ? `<th style="width:36px;text-align:center;"><input type="checkbox" id="emp-chk-all" title="Select All" onchange="SSIEmployees.toggleSelectAll(this.checked)"></th>` : ''}
             <th>Code</th><th>Name</th><th>Type</th><th>Department</th>
             <th>Designation</th><th>Unit</th><th>Join Date</th><th>Phone</th>
             ${isAdmin ? '<th style="text-align:right;">Monthly Salary</th>' : ''}
@@ -104,7 +113,8 @@ const SSIEmployees = (() => {
     return list.map(e => {
       const unit = (st.units||[]).find(u=>u.id===e.unit_id);
       const active = e.active !== false;
-      return `<tr>
+      return `<tr data-emp-id="${e.id}">
+        ${isAdmin ? `<td style="text-align:center;"><input type="checkbox" class="emp-row-chk" value="${e.id}" onchange="SSIEmployees._onRowCheck()"></td>` : ''}
         <td><code style="font-size:12px;">${e.emp_code||'—'}</code></td>
         <td><b>${e.name}</b></td>
         <td><span class="badge" style="background:${e.type==='STAFF'?'#FDECEA':'#dcfce7'};color:${e.type==='STAFF'?'#922B21':'#166534'};">${e.type==='STAFF'?'👔 Staff':'👷 Worker'}</span></td>
@@ -437,6 +447,92 @@ const SSIEmployees = (() => {
   }
 
   /* ── Delete employee (ADMIN only) ─────────────────────────── */
+  /* ── Bulk / Delete-All helpers ──────────────────────────── */
+  function _onRowCheck() {
+    const checked = document.querySelectorAll('.emp-row-chk:checked');
+    const all     = document.querySelectorAll('.emp-row-chk');
+    const selBtn  = document.getElementById('emp-delete-selected-btn');
+    const selCount = document.getElementById('emp-sel-count');
+    const allChk  = document.getElementById('emp-chk-all');
+    if (selBtn)   selBtn.style.display  = checked.length > 0 ? 'inline-flex' : 'none';
+    if (selCount) selCount.textContent  = checked.length;
+    if (allChk)   allChk.indeterminate  = checked.length > 0 && checked.length < all.length;
+    if (allChk)   allChk.checked        = all.length > 0 && checked.length === all.length;
+  }
+
+  function toggleSelectAll(checked) {
+    document.querySelectorAll('.emp-row-chk').forEach(cb => { cb.checked = checked; });
+    _onRowCheck();
+  }
+
+  async function deleteSelected() {
+    if (!SSIApp.hasRole('ADMIN')) { SSIApp.toast('🔒 Admin only'); return; }
+    const ids = [...document.querySelectorAll('.emp-row-chk:checked')].map(cb => cb.value);
+    if (!ids.length) { SSIApp.toast('No employees selected'); return; }
+    const st = SSIApp.getState();
+    const names = ids.map(id => {
+      const e = (st.employees||[]).find(e=>e.id===id);
+      return e ? `${e.emp_code} – ${e.name}` : id;
+    });
+    const ok = await SSIApp.confirm(
+      `Delete ${ids.length} selected employee(s)?\n\n${names.slice(0,5).join('\n')}${names.length>5?`\n…and ${names.length-5} more`:''}\n\nAttendance & payroll records will remain but employees will be removed. This cannot be undone.`
+    );
+    if (!ok) return;
+    st.employees = (st.employees||[]).filter(e => !ids.includes(e.id));
+    await SSIApp.saveState(st);
+    SSIApp.audit('EMPLOYEE_BULK_DELETE', `Bulk deleted ${ids.length} employees: ${ids.join(', ')}`);
+    SSIApp.toast(`🗑️ ${ids.length} employee(s) deleted`);
+    refresh(document.getElementById('page-area'));
+  }
+
+  async function deleteAll() {
+    if (!SSIApp.hasRole('ADMIN')) { SSIApp.toast('🔒 Admin only'); return; }
+    const st = SSIApp.getState();
+    const total = (st.employees||[]).length;
+    if (!total) { SSIApp.toast('No employees to delete', 'info'); return; }
+
+    // Two-step confirmation for safety
+    const step1 = await SSIApp.confirm(
+      `⚠️ DELETE ALL EMPLOYEES\n\nThis will permanently remove ALL ${total} employee record(s) from the system.\n\nAttendance and payroll records will remain but will have no linked employee.\n\nClick OK to proceed to final confirmation.`
+    );
+    if (!step1) return;
+
+    // Second confirmation — type-to-confirm via custom modal
+    const confirmed = await _confirmTyped(`Type DELETE ALL to confirm removing all ${total} employees:`, 'DELETE ALL');
+    if (!confirmed) return;
+
+    st.employees = [];
+    await SSIApp.saveState(st);
+    SSIApp.audit('EMPLOYEE_DELETE_ALL', `Deleted ALL ${total} employees from the system`);
+    SSIApp.toast(`🗑️ All ${total} employees deleted`, 'success');
+    refresh(document.getElementById('page-area'));
+  }
+
+  function _confirmTyped(message, expectedText) {
+    return new Promise(resolve => {
+      const html = `
+        <div class="modal-header" style="background:#7f1d1d;color:#fff;">
+          <h3 style="margin:0;font-size:16px;">⚠️ Final Confirmation Required</h3>
+          <button onclick="SSIApp.closeModal()" style="background:none;border:none;color:#fff;font-size:20px;cursor:pointer;">✕</button>
+        </div>
+        <div class="modal-body" style="padding:24px;">
+          <p style="margin:0 0 16px;color:#7f1d1d;font-weight:600;">${message}</p>
+          <input id="confirm-type-input" type="text" placeholder='Type: ${expectedText}'
+            style="border:2px solid #dc2626;border-radius:8px;padding:10px 14px;width:100%;box-sizing:border-box;font-size:15px;letter-spacing:1px;"
+            oninput="document.getElementById('confirm-type-btn').disabled = this.value.trim() !== '${expectedText}';">
+        </div>
+        <div class="modal-footer" style="justify-content:flex-end;gap:10px;">
+          <button class="btn btn-secondary" onclick="SSIApp.closeModal(); window._empDelResolve(false)">Cancel</button>
+          <button id="confirm-type-btn" class="btn btn-danger" disabled
+            onclick="SSIApp.closeModal(); window._empDelResolve(true)">
+            🗑️ Delete All Employees
+          </button>
+        </div>`;
+      window._empDelResolve = resolve;
+      SSIApp.showModal(html);
+    });
+  }
+
   async function deleteEmployee(id) {
     if (!SSIApp.hasRole('ADMIN')) { SSIApp.toast('🔒 Admin only'); return; }
     const st  = SSIApp.getState();
@@ -470,5 +566,5 @@ const SSIEmployees = (() => {
     SSIApp.excelDownload(rows, 'Employees', 'SSI_Employee_Export');
   }
 
-  return { render, refresh, applyFilter, openForm, saveEmployee, toggleActive, deleteEmployee, downloadTemplate, importFile, exportExcel };
+  return { render, refresh, applyFilter, openForm, saveEmployee, toggleActive, deleteEmployee, deleteSelected, deleteAll, toggleSelectAll, _onRowCheck, downloadTemplate, importFile, exportExcel };
 })();

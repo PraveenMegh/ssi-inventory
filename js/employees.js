@@ -84,7 +84,7 @@ const SSIEmployees = (() => {
             ${isAdmin ? `<th style="width:36px;text-align:center;"><input type="checkbox" id="emp-chk-all" title="Select All" onchange="SSIEmployees.toggleSelectAll(this.checked)"></th>` : ''}
             <th>Code</th><th>Name</th><th>Type</th><th>Department</th>
             <th>Designation</th><th>Unit</th><th>Join Date</th><th>Phone</th>
-            ${isAdmin ? '<th style="text-align:right;">Monthly Salary</th>' : ''}
+            ${isAdmin ? '<th style="text-align:right;color:#6d28d9;">🏦 Bank Sal.</th><th style="text-align:right;color:#059669;">💵 Cash Sal.</th><th style="text-align:right;">Total CTC</th>' : ''}
             <th>Status</th><th>Actions</th>
           </tr></thead>
           <tbody id="emp-tbody">${buildRows(emps, st, isAdmin)}</tbody>
@@ -108,7 +108,7 @@ const SSIEmployees = (() => {
       return true;
     });
 
-    if (!list.length) return `<tr><td colspan="${isAdmin?11:10}" style="text-align:center;padding:40px;color:#94a3b8;">No employees found.</td></tr>`;
+    if (!list.length) return `<tr><td colspan="${isAdmin?13:10}" style="text-align:center;padding:40px;color:#94a3b8;">No employees found.</td></tr>`;
 
     return list.map(e => {
       const unit = (st.units||[]).find(u=>u.id===e.unit_id);
@@ -123,7 +123,11 @@ const SSIEmployees = (() => {
         <td>${unit?.name||'—'}</td>
         <td>${e.join_date||'—'}</td>
         <td>${e.phone||'—'}</td>
-        ${isAdmin ? `<td style="text-align:right;font-weight:600;">₹${(e.monthly_salary||0).toLocaleString('en-IN')}</td>` : ''}
+        ${isAdmin ? `
+          <td style="text-align:right;color:#6d28d9;font-weight:600;">₹${(e.bank_salary||0).toLocaleString('en-IN')}</td>
+          <td style="text-align:right;color:#059669;font-weight:600;">₹${(e.cash_salary||0).toLocaleString('en-IN')}</td>
+          <td style="text-align:right;font-weight:700;border-left:2px solid #e2e8f0;">₹${(e.monthly_salary||0).toLocaleString('en-IN')}</td>
+        ` : ''}
         <td><span style="background:${active?'#dcfce7':'#fee2e2'};color:${active?'#166534':'#991b1b'};padding:2px 8px;border-radius:12px;font-size:12px;">${active?'Active':'Inactive'}</span></td>
         <td>
           ${SSIApp.hasRole('ADMIN') ? `
@@ -198,10 +202,47 @@ const SSIEmployees = (() => {
               <label>Father / Husband / Wife Name</label>
               <input id="ef-relation" value="${emp?.relation_name||''}" placeholder="Relation's full name">
             </div>
-            <div>
-              <label>Monthly Salary (₹) *</label>
-              <input type="number" id="ef-salary" value="${emp?.monthly_salary||''}" placeholder="e.g. 15000" min="0">
+          </div>
+
+          <!-- ── Salary Breakdown ────────────────────────── -->
+          <div style="margin-top:16px;padding:16px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;">
+            <div style="font-weight:700;font-size:13px;color:#1e293b;margin-bottom:12px;">💰 Salary Breakdown</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div>
+                <label style="display:flex;align-items:center;gap:6px;">
+                  🏦 Bank Salary (₹)
+                  <span style="font-size:11px;color:#6d28d9;font-weight:600;">EPF &amp; ESI applicable</span>
+                </label>
+                <input type="number" id="ef-bank-salary"
+                  value="${emp?.bank_salary ?? (emp?.monthly_salary||'')||''}"
+                  placeholder="Salary credited to bank" min="0"
+                  style="border-color:#818cf8;"
+                  oninput="SSIEmployees._calcTotal()">
+                <div style="font-size:11px;color:#7c3aed;margin-top:3px;">PF, ESI deductions apply on this component</div>
+              </div>
+              <div>
+                <label style="display:flex;align-items:center;gap:6px;">
+                  💵 Cash Salary (₹)
+                  <span style="font-size:11px;color:#059669;font-weight:600;">No deductions</span>
+                </label>
+                <input type="number" id="ef-cash-salary"
+                  value="${emp?.cash_salary||''}"
+                  placeholder="Paid in cash (no EPF/ESI)" min="0"
+                  style="border-color:#6ee7b7;"
+                  oninput="SSIEmployees._calcTotal()">
+                <div style="font-size:11px;color:#059669;margin-top:3px;">No EPF / ESI / TDS on this component</div>
+              </div>
             </div>
+            <div style="margin-top:12px;padding:10px 14px;background:#1e293b;border-radius:8px;display:flex;align-items:center;justify-content:space-between;">
+              <span style="color:#94a3b8;font-size:13px;font-weight:600;">Total CTC (Bank + Cash)</span>
+              <span id="ef-total-salary-display" style="color:#f0fdf4;font-size:18px;font-weight:800;">
+                ₹${((emp?.bank_salary||0)+(emp?.cash_salary||0)||(emp?.monthly_salary||0)).toLocaleString('en-IN')}
+              </span>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+            <div style="display:none;"><!-- hidden legacy salary --></div>
             <div>
               <label>Bank Account No.</label>
               <input id="ef-bank-ac" value="${emp?.bank_ac||''}" placeholder="Account number">
@@ -228,15 +269,27 @@ const SSIEmployees = (() => {
     document.body.insertAdjacentHTML('beforeend', html);
   }
 
+  function _calcTotal() {
+    const bank = parseFloat(document.getElementById('ef-bank-salary')?.value) || 0;
+    const cash = parseFloat(document.getElementById('ef-cash-salary')?.value) || 0;
+    const el   = document.getElementById('ef-total-salary-display');
+    if (el) el.textContent = '₹' + (bank + cash).toLocaleString('en-IN');
+  }
+
   async function saveEmployee(empId) {
     const code   = document.getElementById('ef-code')?.value.trim();
     const name   = document.getElementById('ef-name')?.value.trim();
     const type   = document.getElementById('ef-type')?.value;
     const unitId = document.getElementById('ef-unit')?.value;
-    const salary = parseFloat(document.getElementById('ef-salary')?.value) || 0;
+    const bankSalary = parseFloat(document.getElementById('ef-bank-salary')?.value) || 0;
+    const cashSalary = parseFloat(document.getElementById('ef-cash-salary')?.value) || 0;
+    const salary     = bankSalary + cashSalary;   // total CTC
 
-    if (!code || !name || !type || !unitId || !salary) {
-      SSIApp.toast('Fill all required fields (Code, Name, Type, Unit, Salary)'); return;
+    if (!code || !name || !type || !unitId) {
+      SSIApp.toast('Fill all required fields (Code, Name, Type, Unit)'); return;
+    }
+    if (salary <= 0) {
+      SSIApp.toast('Please enter at least Bank Salary or Cash Salary'); return;
     }
 
     const st = SSIApp.getState();
@@ -257,7 +310,9 @@ const SSIEmployees = (() => {
       join_date:      document.getElementById('ef-join')?.value||'',
       phone:          document.getElementById('ef-phone')?.value.trim()||'',
       relation_name:  document.getElementById('ef-relation')?.value.trim()||'',
-      monthly_salary: salary,
+      monthly_salary: salary,          // total CTC (bank+cash)
+      bank_salary:    bankSalary,
+      cash_salary:    cashSalary,
       bank_ac:        document.getElementById('ef-bank-ac')?.value.trim()||'',
       bank_ifsc:      document.getElementById('ef-bank-ifsc')?.value.trim()||'',
       bank_name:      document.getElementById('ef-bank-name')?.value.trim()||'',
@@ -296,9 +351,9 @@ const SSIEmployees = (() => {
   /* ── Template download ───────────────────────────────────── */
   function downloadTemplate() {
     const rows = [
-      ['emp_code','name','type','unit_name','department','designation','join_date','phone','relation_name','monthly_salary','bank_ac','bank_ifsc','bank_name','notes'],
-      ['EMP-001','Ramesh Kumar','WORKER','Modinagar','Production','Machine Operator','2024-01-01','9876543210','Ram Kumar (Father)','12000','','','',''],
-      ['EMP-002','Suresh Sharma','STAFF','Modinagar','Admin','Supervisor','2024-01-01','9876543211','Geeta Sharma (Wife)','25000','123456789','SBIN0001234','SBI',''],
+      ['emp_code','name','type','unit_name','department','designation','join_date','phone','relation_name','bank_salary','cash_salary','bank_ac','bank_ifsc','bank_name','notes'],
+      ['EMP-001','Ramesh Kumar','WORKER','Modinagar','Production','Machine Operator','2024-01-01','9876543210','Ram Kumar (Father)','10000','2000','','','',''],
+      ['EMP-002','Suresh Sharma','STAFF','Modinagar','Admin','Supervisor','2024-01-01','9876543211','Geeta Sharma (Wife)','20000','5000','123456789','SBIN0001234','SBI',''],
     ];
     SSIApp.excelDownload(rows, 'Employees_Template', 'SSI_Employee_Import_Template');
   }
@@ -339,7 +394,9 @@ const SSIEmployees = (() => {
         join:     header.indexOf('join_date'),
         phone:    header.indexOf('phone'),
         relation: header.indexOf('relation_name'),
-        salary:   header.indexOf('monthly_salary'),
+        salary:     header.indexOf('monthly_salary'),
+        bankSalary: header.indexOf('bank_salary'),
+        cashSalary: header.indexOf('cash_salary'),
         bankAc:   header.indexOf('bank_ac'),
         bankIfsc: header.indexOf('bank_ifsc'),
         bankName: header.indexOf('bank_name'),
@@ -413,7 +470,15 @@ const SSIEmployees = (() => {
           join_date:      cellStr(r, idx.join),
           phone:          cellStr(r, idx.phone),
           relation_name:  cellStr(r, idx.relation),
-          monthly_salary: idx.salary>=0 ? cellNum(r, idx.salary) : 0,
+          bank_salary:    idx.bankSalary>=0 ? cellNum(r, idx.bankSalary) : 0,
+          cash_salary:    idx.cashSalary>=0 ? cellNum(r, idx.cashSalary) : 0,
+          monthly_salary: (() => {
+            // prefer explicit total; else sum bank+cash; else legacy monthly_salary column
+            const b = idx.bankSalary>=0 ? cellNum(r, idx.bankSalary) : 0;
+            const c = idx.cashSalary>=0 ? cellNum(r, idx.cashSalary) : 0;
+            if (b || c) return b + c;
+            return idx.salary>=0 ? cellNum(r, idx.salary) : 0;
+          })(),
           bank_ac:        cellStr(r, idx.bankAc),
           bank_ifsc:      cellStr(r, idx.bankIfsc),
           bank_name:      cellStr(r, idx.bankName),
@@ -553,18 +618,18 @@ const SSIEmployees = (() => {
     const st = SSIApp.getState();
     const isAdmin = SSIApp.hasRole('ADMIN');
     const headers = ['Code','Name','Type','Unit','Department','Designation','Join Date','Phone','Father/Spouse Name','Status',
-      ...(isAdmin ? ['Monthly Salary','Bank AC','Bank IFSC','Bank Name'] : [])];
+      ...(isAdmin ? ['Bank Salary (EPF/ESI)','Cash Salary','Total CTC','Bank AC','Bank IFSC','Bank Name'] : [])];
     const rows = [headers];
     (st.employees||[]).forEach(e => {
       const unit = (st.units||[]).find(u=>u.id===e.unit_id);
       rows.push([
         e.emp_code, e.name, e.type, unit?.name||'', e.department, e.designation,
         e.join_date, e.phone, e.relation_name||'', e.active!==false?'Active':'Inactive',
-        ...(isAdmin ? [e.monthly_salary, e.bank_ac, e.bank_ifsc, e.bank_name] : [])
+        ...(isAdmin ? [e.bank_salary||0, e.cash_salary||0, e.monthly_salary||0, e.bank_ac, e.bank_ifsc, e.bank_name] : [])
       ]);
     });
     SSIApp.excelDownload(rows, 'Employees', 'SSI_Employee_Export');
   }
 
-  return { render, refresh, applyFilter, openForm, saveEmployee, toggleActive, deleteEmployee, deleteSelected, deleteAll, toggleSelectAll, _onRowCheck, downloadTemplate, importFile, exportExcel };
+  return { render, refresh, applyFilter, openForm, saveEmployee, _calcTotal, toggleActive, deleteEmployee, deleteSelected, deleteAll, toggleSelectAll, _onRowCheck, downloadTemplate, importFile, exportExcel };
 })();

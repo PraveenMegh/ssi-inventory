@@ -8,7 +8,7 @@
 
 const SSIUsers = (() => {
 
-  const ROLES = ['ADMIN', 'STOCK', 'DISPATCH', 'SALES', 'ACCOUNTANT'];
+  const ROLES = ['ADMIN', 'STOCK', 'DISPATCH', 'SALES', 'ACCOUNTANT', 'ACCOUNTS'];
 
   const ROLE_COLORS = {
     ADMIN:      { bg:'#fef3c7', color:'#92400e' },
@@ -16,6 +16,7 @@ const SSIUsers = (() => {
     DISPATCH:   { bg:'#d1fae5', color:'#065f46' },
     SALES:      { bg:'#ede9fe', color:'#5b21b6' },
     ACCOUNTANT: { bg:'#fce7f3', color:'#9d174d' },
+    ACCOUNTS:   { bg:'#fef9c3', color:'#854d0e' },
   };
 
   function roleBadge(role) {
@@ -137,7 +138,17 @@ const SSIUsers = (() => {
           <div>
             <label style="display:block;font-size:.82rem;font-weight:600;color:#374151;margin-bottom:.3rem;">Role *</label>
             <select id="usr-role" class="form-input">
-              ${ROLES.map(r => `<option value="${r}" ${(user?.role || 'SALES') === r ? 'selected' : ''}>${r}</option>`).join('')}
+              ${ROLES.map(r => {
+                const labels = {
+                  ADMIN:'ADMIN – Full Access',
+                  STOCK:'STOCK – Inventory only',
+                  DISPATCH:'DISPATCH – Dispatch only',
+                  SALES:'SALES – Orders & Clients',
+                  ACCOUNTANT:'ACCOUNTANT – HR (Employees, Attendance, Payroll)',
+                  ACCOUNTS:'ACCOUNTS – Payroll (Workers only, no other data)'
+                };
+                return `<option value="${r}" ${(user?.role || 'SALES') === r ? 'selected' : ''}>${labels[r]||r}</option>`;
+              }).join('')}
             </select>
           </div>
           <div style="display:flex;align-items:center;gap:.5rem;">

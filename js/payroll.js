@@ -20,7 +20,7 @@ const SSIPayroll = (() => {
 
   /* ── render ─────────────────────────────────────────────── */
   function render(area) {
-    if (!SSIApp.hasRole('ADMIN','ACCOUNTANT')) {
+    if (!SSIApp.hasRole('ADMIN','ACCOUNTANT','ACCOUNTS')) {
       area.innerHTML = '<div class="empty-state"><div class="icon">🔒</div><p>Access Denied</p></div>';
       return;
     }
@@ -31,6 +31,7 @@ const SSIPayroll = (() => {
     const st    = SSIApp.getState();
     const today = new Date().toISOString().slice(0,7);
     const isAdmin = SSIApp.hasRole('ADMIN');
+    const isAccountsOnly = SSIApp.hasRole('ACCOUNTS');  // ACCOUNTS: payroll workers only
 
     // Payroll records grouped by period
     const payrolls = st.payroll || [];
@@ -61,7 +62,7 @@ const SSIPayroll = (() => {
             <select id="pr-filter-type" onchange="SSIPayroll.applyFilter()">
               <option value="">All</option>
               <option value="WORKER">👷 Workers</option>
-              ${isAdmin ? '<option value="STAFF">👔 Staff</option>' : ''}
+              ${(isAdmin) ? '<option value="STAFF">👔 Staff</option>' : ''}
             </select>
           </div>
           <div>
@@ -115,13 +116,14 @@ const SSIPayroll = (() => {
   function applyFilter() {
     const st       = SSIApp.getState();
     const isAdmin  = SSIApp.hasRole('ADMIN');
+    const isAccountsOnly = SSIApp.hasRole('ACCOUNTS');
     const period   = document.getElementById('pr-filter-period')?.value  || '';
     const typeF    = document.getElementById('pr-filter-type')?.value    || '';
     const unitF    = document.getElementById('pr-filter-unit')?.value    || '';
     const statusF  = document.getElementById('pr-filter-status')?.value  || '';
 
     let list = (st.payroll||[]).filter(p => {
-      // ACCOUNTANT sees workers only
+      // ACCOUNTANT and ACCOUNTS see workers only
       const emp = (st.employees||[]).find(e=>e.id===p.emp_id);
       if (!isAdmin && emp?.type === 'STAFF') return false;
       if (period  && p.period   !== period)  return false;
@@ -209,7 +211,7 @@ const SSIPayroll = (() => {
           <select id="gen-type">
             <option value="">All</option>
             <option value="WORKER">👷 Workers Only</option>
-            ${isAdmin ? '<option value="STAFF">👔 Staff Only</option>' : ''}
+            ${(isAdmin) ? '<option value="STAFF">👔 Staff Only</option>' : ''}
           </select>
         </div>
         <div>
@@ -247,10 +249,11 @@ const SSIPayroll = (() => {
 
     const st      = SSIApp.getState();
     const isAdmin = SSIApp.hasRole('ADMIN');
+    const isAccountsOnly = SSIApp.hasRole('ACCOUNTS');  // ACCOUNTS: workers only
     if (!st.payroll) st.payroll = [];
 
     let emps = (st.employees||[]).filter(e=>e.active!==false);
-    if (!isAdmin) emps = emps.filter(e=>e.type==='WORKER');  // Accountant: workers only
+    if (!isAdmin) emps = emps.filter(e=>e.type==='WORKER');  // Accountant/Accounts: workers only
     if (typeF)    emps = emps.filter(e=>e.type===typeF);
     if (unitF)    emps = emps.filter(e=>e.unit_id===unitF);
 

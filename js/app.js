@@ -25,7 +25,8 @@ const SSIApp = {
     { id:'u7',  username:'madhu',    password:'madhu123',    name:'Madhu Sharma',        role:'SALES',    active:true },
     { id:'u8',  username:'raja',     password:'raja123',     name:'Raja',                role:'SALES',    active:true },
     { id:'u9',  username:'mittal',   password:'mittal123',   name:'Mittal Delhi Team',   role:'SALES',    active:true },
-    { id:'u10', username:'praveen',  password:'praveen123',  name:'Praveen Sharma',      role:'SALES',    active:true }
+    { id:'u10', username:'praveen',  password:'praveen123',  name:'Praveen Sharma',      role:'SALES',    active:true },
+    { id:'u11', username:'accounts',   password:'accounts123', name:'Accounts',             role:'ACCOUNTS', active:true }
   ],
 
   // ── State ──────────────────────────────────────────────────
@@ -207,7 +208,8 @@ const SSIApp = {
       STOCK:       ['dashboard','inventory'],
       DISPATCH:    ['dashboard','dispatch'],
       SALES:       ['dashboard','orders','clients'],
-      ACCOUNTANT:  ['dashboard','employees','attendance','payroll']
+      ACCOUNTANT:  ['dashboard','employees','attendance','payroll'],
+      ACCOUNTS:    ['payroll']
     };
 
     if (!(allowed[u.role] || []).includes(page)) {

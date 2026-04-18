@@ -283,7 +283,7 @@ const SSIPayroll = (() => {
     if (orphanBanner) {
       if (orphaned.length > 0) {
         orphanBanner.style.display = 'block';
-        orphanBanner.innerHTML = `⚠️ <strong>${orphaned.length} payroll record(s)</strong> have no linked employee (employee was re-imported with a new ID). <strong>Fix:</strong> (1) Set employee salaries in Employee Master, then (2) click <b>⚙️ Generate Payroll</b> again — existing records will be updated with correct names.`;
+        orphanBanner.innerHTML = `⚠️ <strong>${orphaned.length} payroll record(s)</strong> have no linked employee — employees were deleted &amp; re-imported with new IDs. <button onclick="SSIPayroll.openRelinkModal()" style="margin-left:12px;background:#f59e0b;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;">🔗 Re-link Records</button>`;
       } else {
         orphanBanner.style.display = 'none';
       }
@@ -728,10 +728,114 @@ const SSIPayroll = (() => {
     return `<span style="background:${v.bg};color:${v.c};padding:3px 8px;border-radius:12px;font-size:11px;font-weight:600;">${v.l}</span>`;
   }
 
+
+  /* ── Re-link Orphaned Payroll Records ───────────────────────
+     When employees are deleted+reimported, payroll emp_ids break.
+     This modal lets admin manually map each orphaned emp_id to
+     the correct current employee.                              */
+  function openRelinkModal() {
+    if (!SSIApp.hasRole('ADMIN')) return;
+    const st   = SSIApp.getState();
+    const emps = (st.employees||[]).filter(e=>e.active!==false);
+
+    // Find unique orphaned emp_ids (not found by any lookup tier)
+    const orphanGroups = {};
+    (st.payroll||[]).forEach(p => {
+      if (_findEmp(st, p)) return; // already linked — skip
+      if (!orphanGroups[p.emp_id]) {
+        orphanGroups[p.emp_id] = { salary: p.monthly_salary, count: 0, ids: [] };
+      }
+      orphanGroups[p.emp_id].count++;
+      orphanGroups[p.emp_id].ids.push(p.id);
+    });
+
+    const orphanList = Object.entries(orphanGroups);
+    if (!orphanList.length) {
+      SSIApp.toast('✅ No orphaned records — all payroll records are properly linked!');
+      return;
+    }
+
+    const empOptions = emps.map(e =>
+      `<option value="${e.id}">${e.emp_code} – ${e.name} (${e.type})</option>`
+    ).join('');
+
+    const rows = orphanList.map(([oldId, info], i) => `
+      <tr style="border-bottom:1px solid #e2e8f0;">
+        <td style="padding:10px 8px;font-size:12px;color:#64748b;">${info.count} record(s)<br>Salary: ₹${(info.salary||0).toLocaleString('en-IN')}</td>
+        <td style="padding:10px 8px;">
+          <select id="relink-sel-${i}" data-oldid="${oldId}" data-recids="${info.ids.join(',')}"
+            style="width:100%;padding:6px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;">
+            <option value="">— Select Employee —</option>
+            ${empOptions}
+          </select>
+        </td>
+      </tr>`).join('');
+
+    SSIApp.modal(`
+      <div style="padding:4px;">
+        <h3 style="margin-bottom:4px;font-size:17px;font-weight:700;">🔗 Re-link Payroll Records</h3>
+        <p style="color:#64748b;font-size:13px;margin-bottom:16px;">
+          ${orphanList.length} group(s) of payroll records have no linked employee 
+          (employees were deleted &amp; re-imported with new IDs).<br>
+          Match each group to the correct employee below.
+        </p>
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr style="background:#f8fafc;">
+              <th style="padding:8px;text-align:left;font-size:12px;color:#64748b;font-weight:600;">Payroll Records</th>
+              <th style="padding:8px;text-align:left;font-size:12px;color:#64748b;font-weight:600;">Assign to Employee</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+          <button class="btn btn-secondary" onclick="SSIApp.closeModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="SSIPayroll.saveRelink()">✅ Save Links</button>
+        </div>
+      </div>
+    `);
+  }
+
+  async function saveRelink() {
+    const st   = SSIApp.getState();
+    const emps = st.employees || [];
+    let linked = 0;
+
+    // Collect all select elements with data-oldid
+    document.querySelectorAll('[data-oldid]').forEach(sel => {
+      const newEmpId = sel.value;
+      if (!newEmpId) return;
+      const emp  = emps.find(e => e.id === newEmpId);
+      if (!emp) return;
+      const unit = (st.units||[]).find(u => u.id === emp.unit_id);
+      const recIds = (sel.dataset.recids || '').split(',').filter(Boolean);
+
+      recIds.forEach(rid => {
+        const rec = (st.payroll||[]).find(p => p.id === rid);
+        if (!rec) return;
+        rec.emp_id    = emp.id;
+        rec.emp_name  = emp.name || '';
+        rec.emp_code  = emp.emp_code || '';
+        rec.emp_type  = emp.type || '';
+        rec.unit_name = unit?.name || '';
+        linked++;
+      });
+    });
+
+    if (!linked) { SSIApp.toast('⚠️ No employees selected — nothing saved'); return; }
+
+    await SSIApp.saveState(st);
+    SSIApp.closeModal();
+    SSIApp.toast(`✅ Re-linked ${linked} payroll record(s) successfully`);
+    SSIApp.audit('PAYROLL_RELINK', `Re-linked ${linked} orphaned payroll records`);
+    applyFilter();
+  }
+
   return {
     render, refresh, applyFilter,
     openGenerateModal, runGenerate,
     openEdit, saveEdit, _calcNet, deletePayroll, markPaid,
-    printSlip, exportExcel
+    printSlip, exportExcel,
+    openRelinkModal, saveRelink
   };
 })();

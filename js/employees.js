@@ -529,8 +529,16 @@ const SSIEmployees = (() => {
         const type     = cellStr(r, idx.type).toUpperCase().includes('STAFF') ? 'STAFF' : 'WORKER';
         const existing = st.employees.findIndex(e => e.emp_code === code);
 
+        // If employee was deleted (existing=-1), check payroll/attendance for old ID
+        // so we don't break existing payroll/attendance records
+        let preservedId = null;
+        if (existing < 0) {
+          const payrollRef = (st.payroll||[]).find(p => p.emp_code === code);
+          if (payrollRef) preservedId = payrollRef.emp_id;
+        }
+
         const entry = {
-          id:             existing>=0 ? st.employees[existing].id : SSIApp.uid(),
+          id:             existing>=0 ? st.employees[existing].id : (preservedId || SSIApp.uid()),
           emp_code:       code,
           name:           empName,
           type,

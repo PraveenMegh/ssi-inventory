@@ -148,11 +148,15 @@ const SSIEmployees = (() => {
   function applyFilter() {
     const st = SSIApp.getState();
     const isAdmin = SSIApp.hasRole('ADMIN');
+    const isAccountsOnly = SSIApp.hasRole('ACCOUNTS');
     const tbody = document.getElementById('emp-tbody');
     if (!tbody) return;
-    tbody.innerHTML = buildRows(st.employees||[], st, isAdmin);
+    const empList = isAccountsOnly
+      ? (st.employees||[]).filter(e => e.type === 'WORKER')
+      : (st.employees||[]);
+    tbody.innerHTML = buildRows(empList, st, isAdmin, isAccountsOnly);
     const count = document.getElementById('emp-count');
-    if (count) count.textContent = (st.employees||[]).filter(e=>e.active!==false).length;
+    if (count) count.textContent = empList.filter(e=>e.active!==false).length;
   }
 
   /* ── Add / Edit form modal ────────────────────────────────── */

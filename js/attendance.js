@@ -95,6 +95,7 @@ const SSIAttendance = (() => {
 
   function applyFilter() {
     const st      = SSIApp.getState();
+    const isAccountsOnly = SSIApp.hasRole('ACCOUNTS'); // ACCOUNTS: workers only
     const month   = document.getElementById('att-filter-month')?.value || new Date().toISOString().slice(0,7);
     const typeF   = document.getElementById('att-filter-type')?.value  || '';
     const unitF   = document.getElementById('att-filter-unit')?.value  || '';

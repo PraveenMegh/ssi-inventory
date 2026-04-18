@@ -18,6 +18,112 @@ const SSIPayroll = (() => {
   const ESI_RATE  = 0.0075;  // 0.75% employee ESI on gross
   const ESI_LIMIT = 21000;   // ESI not applicable above ₹21,000 gross
 
+  /* ── Employee lookup helper (3-tier: id → emp_code → null) ─
+     Handles the case where employees were deleted and re-imported
+     with new IDs after payroll records were already generated.  */
+  function _findEmp(st, p) {
+    const emps = st.employees || [];
+    // Tier 1: exact id match (normal case)
+    let emp = emps.find(e => e.id === p.emp_id);
+    if (emp) return emp;
+    // Tier 2: match by emp_code stored in payroll record (new records)
+    if (p.emp_code) emp = emps.find(e => e.emp_code === p.emp_code);
+    if (emp) return emp;
+    // Tier 3: match by name stored in payroll record (new records)
+    if (p.emp_name) emp = emps.find(e => e.name === p.emp_name);
+    if (emp) return emp;
+    // Tier 4: emp_id might actually be an emp_code (legacy edge case)
+    emp = emps.find(e => e.emp_code === p.emp_id);
+    return emp || null;
+  }
+
+  /* ── Auto-repair broken payroll → employee links ────────────
+     When employees are deleted & re-imported they get new UUIDs.
+     This function tries to re-link orphaned payroll records by
+     matching monthly_salary to a unique employee. Runs silently
+     on each payroll page load; saves state only if repairs made. */
+  async function _repairPayrollLinks() {
+    const st   = SSIApp.getState();
+    const emps = st.employees || [];
+    const recs = st.payroll   || [];
+    if (!emps.length || !recs.length) return;
+
+    let repaired = 0;
+
+    // Build: emp_id → employee for fast lookup
+    const empById  = {};
+    emps.forEach(e => { empById[e.id] = e; });
+
+    // Build: salary → [employees] for matching heuristic
+    // Try monthly_salary, then bank+cash total
+    const empBySal = {};
+    emps.forEach(e => {
+      const sal1 = e.monthly_salary || 0;
+      const sal2 = (e.bank_salary||0) + (e.cash_salary||0);
+      const sal  = sal1 > 0 ? sal1 : sal2;
+      if (sal <= 0) return; // skip ₹0 salary employees (can't match)
+      if (!empBySal[sal]) empBySal[sal] = [];
+      empBySal[sal].push(e);
+    });
+
+    // Find broken records: emp_id not in current employees
+    const brokenIds = new Set(
+      recs.filter(p => !empById[p.emp_id] && !p.emp_code && !p.emp_name)
+          .map(p => p.emp_id)
+    );
+
+    if (!brokenIds.size) return; // Nothing to repair
+
+    // For each broken emp_id, collect all payroll records to determine salary
+    const brokenMap = {}; // emp_id → { salary, type }
+    recs.forEach(p => {
+      if (!brokenIds.has(p.emp_id)) return;
+      if (!brokenMap[p.emp_id]) brokenMap[p.emp_id] = { salary: p.monthly_salary, recs: [] };
+      brokenMap[p.emp_id].recs.push(p);
+    });
+
+    // Track which employees are already matched (avoid double-linking)
+    const matchedEmpIds = new Set(recs.filter(p => empById[p.emp_id]).map(p => p.emp_id));
+
+    for (const [brokenEmpId, info] of Object.entries(brokenMap)) {
+      const sal = info.salary;
+      const candidates = (empBySal[sal] || []).filter(e => !matchedEmpIds.has(e.id));
+
+      if (candidates.length !== 1) continue; // Ambiguous or no match — skip
+
+      const emp  = candidates[0];
+      const unit = (st.units || []).find(u => u.id === emp.unit_id);
+      matchedEmpIds.add(emp.id);
+
+      // Patch all payroll records for this broken emp_id
+      info.recs.forEach(p => {
+        p.emp_id    = emp.id;        // Fix the link
+        p.emp_name  = emp.name || '';
+        p.emp_code  = emp.emp_code || '';
+        p.emp_type  = emp.type || '';
+        p.unit_name = unit?.name || '';
+      });
+      repaired += info.recs.length;
+      console.log('[SSI Payroll] Repaired', info.recs.length, 'records → linked to', emp.emp_code, emp.name);
+    }
+
+    if (repaired > 0) {
+      await SSIApp.saveState(st);
+      console.log('[SSI Payroll] Auto-repair saved:', repaired, 'records fixed');
+    }
+  }
+
+  /* ── Display fields helper (emp live → stored snapshot → '—') */
+  function _empDisplay(emp, p) {
+    const unit = (SSIApp.getState().units || []).find(u => u.id === emp?.unit_id);
+    return {
+      name: emp?.name     || p.emp_name  || '—',
+      code: emp?.emp_code || p.emp_code  || '',
+      type: emp?.type     || p.emp_type  || '',
+      unit: unit?.name    || p.unit_name || '—',
+    };
+  }
+
   /* ── render ─────────────────────────────────────────────── */
   function render(area) {
     if (!SSIApp.hasRole('ADMIN','ACCOUNTANT','ACCOUNTS')) {
@@ -28,6 +134,13 @@ const SSIPayroll = (() => {
   }
 
   function refresh(area) {
+    // Auto-repair broken employee links (silent, saves only if needed)
+    _repairPayrollLinks().then(() => {
+      _doRefresh(area);
+    });
+  }
+
+  function _doRefresh(area) {
     const st    = SSIApp.getState();
     const today = new Date().toISOString().slice(0,7);
     const isAdmin = SSIApp.hasRole('ADMIN');
@@ -46,6 +159,9 @@ const SSIPayroll = (() => {
           <button class="btn btn-primary" onclick="SSIPayroll.openGenerateModal()">⚙️ Generate Payroll</button>
         </div>
       </div>
+
+      <!-- Orphan warning banner -->
+      <div id="pr-orphan-banner" style="display:none;background:#fef3c7;border:1px solid #f59e0b;border-radius:10px;padding:12px 16px;margin-bottom:12px;font-size:13px;color:#92400e;"></div>
 
       <!-- Period selector -->
       <div class="card" style="margin-bottom:16px;padding:16px;">
@@ -124,7 +240,7 @@ const SSIPayroll = (() => {
 
     let list = (st.payroll||[]).filter(p => {
       // ACCOUNTANT and ACCOUNTS see workers only
-      const emp = (st.employees||[]).find(e=>e.id===p.emp_id);
+      const emp = _findEmp(st, p);
       const empType = emp?.type || p.emp_type || '';
       if (!isAdmin && empType === 'STAFF') return false;
       if (period  && p.period   !== period)  return false;
@@ -136,9 +252,9 @@ const SSIPayroll = (() => {
 
     list = list.sort((a,b) => {
       if (b.period !== a.period) return b.period.localeCompare(a.period);
-      const ea = (st.employees||[]).find(e=>e.id===a.emp_id);
-      const eb = (st.employees||[]).find(e=>e.id===b.emp_id);
-      return (ea?.name||'').localeCompare(eb?.name||'');
+      const ea = _findEmp(st, a);
+      const eb = _findEmp(st, b);
+      return ((ea?.name||a.emp_name||'')).localeCompare((eb?.name||b.emp_name||''));
     });
 
     // Summary
@@ -161,15 +277,23 @@ const SSIPayroll = (() => {
 
     const tbody = document.getElementById('pr-tbody');
     if (!tbody) return;
+    // Show warning if any visible records have no employee name (orphaned)
+    const orphaned = list.filter(p => !_findEmp(st, p) && !p.emp_name);
+    const orphanBanner = document.getElementById('pr-orphan-banner');
+    if (orphanBanner) {
+      if (orphaned.length > 0) {
+        orphanBanner.style.display = 'block';
+        orphanBanner.innerHTML = `⚠️ <strong>${orphaned.length} payroll record(s)</strong> have no linked employee (employee was re-imported with a new ID). <strong>Fix:</strong> (1) Set employee salaries in Employee Master, then (2) click <b>⚙️ Generate Payroll</b> again — existing records will be updated with correct names.`;
+      } else {
+        orphanBanner.style.display = 'none';
+      }
+    }
+
     if (!list.length) { tbody.innerHTML = `<tr><td colspan="16" style="text-align:center;padding:40px;color:#94a3b8;">No payroll records found.</td></tr>`; return; }
 
     tbody.innerHTML = list.map(p => {
-      const emp  = (st.employees||[]).find(e=>e.id===p.emp_id);
-      const unit = (st.units||[]).find(u=>u.id===emp?.unit_id);
-      const dName = emp?.name     || p.emp_name  || '—';
-      const dCode = emp?.emp_code || p.emp_code  || '';
-      const dType = emp?.type     || p.emp_type  || '';
-      const dUnit = unit?.name    || p.unit_name || '—';
+      const emp  = _findEmp(st, p);
+      const { name: dName, code: dCode, type: dType, unit: dUnit } = _empDisplay(emp, p);
       const st_badge = _statusBadge(p.status);
       return `<tr>
         <td style="white-space:nowrap;">${_fmtPeriod(p.period)}</td>
@@ -374,7 +498,7 @@ const SSIPayroll = (() => {
     const st  = SSIApp.getState();
     const rec = (st.payroll||[]).find(p=>p.id===recId);
     if (!rec) return;
-    const emp  = (st.employees||[]).find(e=>e.id===rec.emp_id);
+    const emp  = _findEmp(st, rec);
 
     SSIApp.modal(`
       <h3 style="margin-bottom:14px;">✏️ Edit Payroll — ${emp?.name||rec.emp_name||''} (${_fmtPeriod(rec.period)})</h3>
@@ -484,13 +608,8 @@ const SSIPayroll = (() => {
     const st  = SSIApp.getState();
     const rec = (st.payroll||[]).find(p=>p.id===recId);
     if (!rec) return;
-    const emp  = (st.employees||[]).find(e=>e.id===rec.emp_id);
-    const unit = (st.units||[]).find(u=>u.id===emp?.unit_id);
-    // Fallback to stored snapshot when employee re-imported with new ID
-    const _n = emp?.name     || rec.emp_name  || '—';
-    const _c = emp?.emp_code || rec.emp_code  || '—';
-    const _t = emp?.type     || rec.emp_type  || '—';
-    const _u = unit?.name    || rec.unit_name || '—';
+    const emp  = _findEmp(st, rec);
+    const { name: _n, code: _c, type: _t, unit: _u } = _empDisplay(emp, rec);
     const perDay = ((rec.monthly_salary||0)/(rec.working_days||30)).toFixed(2);
 
     const slip = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Salary Slip</title>
@@ -552,7 +671,7 @@ const SSIPayroll = (() => {
     const rec = (st.payroll||[]).find(p=>p.id===recId);
     if (!rec) return;
     if (rec.status === 'PAID') { SSIApp.toast('❌ Cannot delete a PAID payroll record'); return; }
-    const emp = (st.employees||[]).find(e=>e.id===rec.emp_id);
+    const emp = _findEmp(st, rec);
     const ok  = await SSIApp.confirm(`Delete payroll for ${emp?.name||rec.emp_name||'this employee'} (${_fmtPeriod(rec.period)})? This cannot be undone.`);
     if (!ok) return;
     st.payroll = st.payroll.filter(p=>p.id!==recId);
@@ -568,7 +687,7 @@ const SSIPayroll = (() => {
     const isAdmin = SSIApp.hasRole('ADMIN');
     const period  = document.getElementById('pr-filter-period')?.value || '';
     let list      = (st.payroll||[]).filter(p => {
-      const emp = (st.employees||[]).find(e=>e.id===p.emp_id);
+      const emp = _findEmp(st, p);
       if (!isAdmin && emp?.type==='STAFF') return false;
       if (period && p.period!==period) return false;
       return true;
@@ -577,7 +696,7 @@ const SSIPayroll = (() => {
     const headers = ['Period','Emp Code','Name','Type','Unit','Monthly Sal','Days Present','Half Days','Leaves','Paid Leaves','OT Hrs','OT Amt','Deductions','Gross Pay','Net Pay','Status','Payment Mode','Payment Date','Remarks'];
     const rows = [headers];
     list.forEach(p => {
-      const emp  = (st.employees||[]).find(e=>e.id===p.emp_id);
+      const emp  = _findEmp(st, p);
       const unit = (st.units||[]).find(u=>u.id===emp?.unit_id);
       rows.push([
         p.period, emp?.emp_code||p.emp_code||'', emp?.name||p.emp_name||'', emp?.type||p.emp_type||'', unit?.name||p.unit_name||'',

@@ -84,7 +84,7 @@ const SSIEmployees = (() => {
             ${isAdmin ? `<th style="width:36px;text-align:center;"><input type="checkbox" id="emp-chk-all" title="Select All" onchange="SSIEmployees.toggleSelectAll(this.checked)"></th>` : ''}
             <th>Code</th><th>Name</th><th>Type</th><th>Department</th>
             <th>Designation</th><th>Unit</th><th>Join Date</th><th>Phone</th>
-            ${isAdmin ? '<th style="text-align:right;color:#6d28d9;">🏦 Bank Sal.</th><th style="text-align:right;color:#059669;">💵 Cash Sal.</th><th style="text-align:right;">Total CTC</th>' : ''}
+            ${isAdmin ? '<th style="text-align:right;color:#6d28d9;">🏦 Bank Sal.</th><th style="text-align:right;color:#059669;">💵 Cash Sal.</th><th style="text-align:right;">Total CTC</th><th style="text-align:center;">EPF/ESI</th>' : ''}
             <th>Status</th><th>Actions</th>
           </tr></thead>
           <tbody id="emp-tbody">${buildRows(emps, st, isAdmin)}</tbody>
@@ -108,7 +108,7 @@ const SSIEmployees = (() => {
       return true;
     });
 
-    if (!list.length) return `<tr><td colspan="${isAdmin?13:10}" style="text-align:center;padding:40px;color:#94a3b8;">No employees found.</td></tr>`;
+    if (!list.length) return `<tr><td colspan="${isAdmin?14:10}" style="text-align:center;padding:40px;color:#94a3b8;">No employees found.</td></tr>`;
 
     return list.map(e => {
       const unit = (st.units||[]).find(u=>u.id===e.unit_id);
@@ -127,6 +127,11 @@ const SSIEmployees = (() => {
           <td style="text-align:right;color:#6d28d9;font-weight:600;">₹${(e.bank_salary||0).toLocaleString('en-IN')}</td>
           <td style="text-align:right;color:#059669;font-weight:600;">₹${(e.cash_salary||0).toLocaleString('en-IN')}</td>
           <td style="text-align:right;font-weight:700;border-left:2px solid #e2e8f0;">₹${(e.monthly_salary||0).toLocaleString('en-IN')}</td>
+          <td style="text-align:center;">
+            ${e.epf_esi !== false
+              ? '<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">✅ Yes</span>'
+              : '<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">❌ No</span>'}
+          </td>
         ` : ''}
         <td><span style="background:${active?'#dcfce7':'#fee2e2'};color:${active?'#166534':'#991b1b'};padding:2px 8px;border-radius:12px;font-size:12px;">${active?'Active':'Inactive'}</span></td>
         <td>
@@ -204,45 +209,75 @@ const SSIEmployees = (() => {
             </div>
           </div>
 
-          <!-- ── Salary Breakdown ────────────────────────── -->
+          <!-- ── Salary Breakdown ──────────────────── -->
           <div style="margin-top:16px;padding:16px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;">
-            <div style="font-weight:700;font-size:13px;color:#1e293b;margin-bottom:12px;">💰 Salary Breakdown</div>
+            <div style="font-weight:700;font-size:13px;color:#1e293b;margin-bottom:14px;">💰 Salary Breakdown</div>
+
+            <!-- Bank + Cash -->
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
               <div>
-                <label style="display:flex;align-items:center;gap:6px;">
-                  🏦 Bank Salary (₹)
-                  <span style="font-size:11px;color:#6d28d9;font-weight:600;">EPF &amp; ESI applicable</span>
-                </label>
+                <label>🏦 Bank Salary (₹)</label>
                 <input type="number" id="ef-bank-salary"
                   value="${emp ? (emp.bank_salary != null ? emp.bank_salary : (emp.monthly_salary||0)) : ''}"
                   placeholder="Salary credited to bank" min="0"
                   style="border-color:#818cf8;"
                   oninput="SSIEmployees._calcTotal()">
-                <div style="font-size:11px;color:#7c3aed;margin-top:3px;">PF, ESI deductions apply on this component</div>
               </div>
               <div>
-                <label style="display:flex;align-items:center;gap:6px;">
-                  💵 Cash Salary (₹)
-                  <span style="font-size:11px;color:#059669;font-weight:600;">No deductions</span>
-                </label>
+                <label>💵 Cash Salary (₹) <span style="font-size:11px;color:#059669;">(No EPF/ESI)</span></label>
                 <input type="number" id="ef-cash-salary"
                   value="${emp?.cash_salary||''}"
-                  placeholder="Paid in cash (no EPF/ESI)" min="0"
+                  placeholder="Paid in cash (no deductions)" min="0"
                   style="border-color:#6ee7b7;"
                   oninput="SSIEmployees._calcTotal()">
-                <div style="font-size:11px;color:#059669;margin-top:3px;">No EPF / ESI / TDS on this component</div>
               </div>
             </div>
-            <div style="margin-top:12px;padding:10px 14px;background:#1e293b;border-radius:8px;display:flex;align-items:center;justify-content:space-between;">
-              <span style="color:#94a3b8;font-size:13px;font-weight:600;">Total CTC (Bank + Cash)</span>
-              <span id="ef-total-salary-display" style="color:#f0fdf4;font-size:18px;font-weight:800;">
-                ₹${((emp ? (((emp.bank_salary||0)+(emp.cash_salary||0)) || (emp.monthly_salary||0)) : 0)).toLocaleString('en-IN')}
-              </span>
+
+            <!-- EPF/ESI Toggle -->
+            <div style="margin-top:12px;padding:10px 14px;background:#ede9fe;border-radius:8px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+              <span style="font-weight:700;font-size:13px;color:#5b21b6;">EPF &amp; ESI Applicable?</span>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;color:#166534;">
+                <input type="radio" name="ef-epf-esi" id="ef-epf-yes" value="yes"
+                  ${emp && emp.epf_esi === false ? '' : 'checked'}
+                  onchange="SSIEmployees._calcTotal()">
+                ✅ Yes
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;color:#991b1b;">
+                <input type="radio" name="ef-epf-esi" id="ef-epf-no" value="no"
+                  ${emp && emp.epf_esi === false ? 'checked' : ''}
+                  onchange="SSIEmployees._calcTotal()">
+                ❌ No
+              </label>
+              <span style="font-size:11px;color:#7c3aed;">EPF = 12% of Basic &nbsp;|&nbsp; ESI = 0.75% of Bank Sal. (if ≤ ₹21,000/mo)</span>
+            </div>
+
+            <!-- Basic / HRA / Total -->
+            <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+              <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center;">
+                <div style="font-size:11px;color:#64748b;margin-bottom:4px;">Basic (50% of Bank)</div>
+                <div id="ef-basic-display" style="font-size:16px;font-weight:700;color:#5b21b6;">₹0</div>
+                <div style="font-size:10px;color:#7c3aed;margin-top:2px;">EPF &amp; ESI basis</div>
+              </div>
+              <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center;">
+                <div style="font-size:11px;color:#64748b;margin-bottom:4px;">HRA (Balance 50%)</div>
+                <div id="ef-hra-display" style="font-size:16px;font-weight:700;color:#059669;">₹0</div>
+                <div style="font-size:10px;color:#059669;margin-top:2px;">No EPF on HRA</div>
+              </div>
+              <div style="background:#1e293b;border-radius:8px;padding:10px;text-align:center;">
+                <div style="font-size:11px;color:#94a3b8;margin-bottom:4px;">Total CTC</div>
+                <div id="ef-total-salary-display" style="font-size:16px;font-weight:800;color:#f0fdf4;">₹0</div>
+                <div style="font-size:10px;color:#94a3b8;margin-top:2px;">Bank + Cash</div>
+              </div>
+            </div>
+
+            <!-- Deduction Preview -->
+            <div id="ef-deduction-preview" style="margin-top:8px;padding:8px 12px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e;display:none;">
+              <b>Estimated Employee Deductions:</b>
+              &nbsp; EPF = <b id="ef-epf-amt">₹0</b> (12% of Basic)
+              &nbsp;|&nbsp; ESI = <b id="ef-esi-amt">₹0</b> (0.75% of Bank, if ≤ ₹21,000)
+              &nbsp;|&nbsp; Take-home ≈ <b id="ef-takehome">₹0</b>
             </div>
           </div>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
-            <div style="display:none;"><!-- hidden legacy salary --></div>
             <div>
               <label>Bank Account No.</label>
               <input id="ef-bank-ac" value="${emp?.bank_ac||''}" placeholder="Account number">
@@ -270,10 +305,37 @@ const SSIEmployees = (() => {
   }
 
   function _calcTotal() {
-    const bank = parseFloat(document.getElementById('ef-bank-salary')?.value) || 0;
-    const cash = parseFloat(document.getElementById('ef-cash-salary')?.value) || 0;
-    const el   = document.getElementById('ef-total-salary-display');
-    if (el) el.textContent = '₹' + (bank + cash).toLocaleString('en-IN');
+    const bank    = parseFloat(document.getElementById('ef-bank-salary')?.value) || 0;
+    const cash    = parseFloat(document.getElementById('ef-cash-salary')?.value) || 0;
+    const total   = bank + cash;
+    const basic   = Math.round(bank * 0.5);          // 50% of bank
+    const hra     = bank - basic;                     // balance 50%
+    const epfYes  = document.getElementById('ef-epf-yes')?.checked !== false
+                    && !document.getElementById('ef-epf-no')?.checked;
+
+    // Update displays
+    const fmt = v => '₹' + Math.round(v).toLocaleString('en-IN');
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    set('ef-total-salary-display', fmt(total));
+    set('ef-basic-display',        fmt(basic));
+    set('ef-hra-display',          fmt(hra));
+
+    // EPF / ESI deduction preview
+    const prevEl = document.getElementById('ef-deduction-preview');
+    if (prevEl) {
+      if (epfYes && bank > 0) {
+        const epf      = Math.round(basic * 0.12);
+        const esiRate  = bank <= 21000 ? 0.0075 : 0;
+        const esi      = Math.round(bank * esiRate);
+        const takehome = total - epf - esi;
+        set('ef-epf-amt',   fmt(epf));
+        set('ef-esi-amt',   bank <= 21000 ? fmt(esi) : '₹0 (>₹21K limit)');
+        set('ef-takehome',  fmt(takehome));
+        prevEl.style.display = 'block';
+      } else {
+        prevEl.style.display = 'none';
+      }
+    }
   }
 
   async function saveEmployee(empId) {
@@ -313,6 +375,9 @@ const SSIEmployees = (() => {
       monthly_salary: salary,          // total CTC (bank+cash)
       bank_salary:    bankSalary,
       cash_salary:    cashSalary,
+      basic_salary:   Math.round(bankSalary * 0.5),
+      hra:            Math.round(bankSalary * 0.5),
+      epf_esi:        !(document.getElementById('ef-epf-no')?.checked),
       bank_ac:        document.getElementById('ef-bank-ac')?.value.trim()||'',
       bank_ifsc:      document.getElementById('ef-bank-ifsc')?.value.trim()||'',
       bank_name:      document.getElementById('ef-bank-name')?.value.trim()||'',
@@ -397,6 +462,7 @@ const SSIEmployees = (() => {
         salary:     header.indexOf('monthly_salary'),
         bankSalary: header.indexOf('bank_salary'),
         cashSalary: header.indexOf('cash_salary'),
+        epfEsi:   header.indexOf('epf/esi applicable'),
         bankAc:   header.indexOf('bank_ac'),
         bankIfsc: header.indexOf('bank_ifsc'),
         bankName: header.indexOf('bank_name'),
@@ -472,6 +538,9 @@ const SSIEmployees = (() => {
           relation_name:  cellStr(r, idx.relation),
           bank_salary:    idx.bankSalary>=0 ? cellNum(r, idx.bankSalary) : 0,
           cash_salary:    idx.cashSalary>=0 ? cellNum(r, idx.cashSalary) : 0,
+          epf_esi:        idx.epfEsi>=0 ? (cellStr(r,idx.epfEsi).toLowerCase().startsWith('n') ? false : true) : true,
+          basic_salary:   Math.round((idx.bankSalary>=0 ? cellNum(r, idx.bankSalary) : 0) * 0.5),
+          hra:            Math.round((idx.bankSalary>=0 ? cellNum(r, idx.bankSalary) : 0) * 0.5),
           monthly_salary: (() => {
             // prefer explicit total; else sum bank+cash; else legacy monthly_salary column
             const b = idx.bankSalary>=0 ? cellNum(r, idx.bankSalary) : 0;
@@ -618,14 +687,18 @@ const SSIEmployees = (() => {
     const st = SSIApp.getState();
     const isAdmin = SSIApp.hasRole('ADMIN');
     const headers = ['Code','Name','Type','Unit','Department','Designation','Join Date','Phone','Father/Spouse Name','Status',
-      ...(isAdmin ? ['Bank Salary (EPF/ESI)','Cash Salary','Total CTC','Bank AC','Bank IFSC','Bank Name'] : [])];
+      ...(isAdmin ? ['Bank Salary','Cash Salary','Total CTC','Basic (50%)','HRA (50%)','EPF/ESI Applicable','Bank AC','Bank IFSC','Bank Name'] : [])];
     const rows = [headers];
     (st.employees||[]).forEach(e => {
       const unit = (st.units||[]).find(u=>u.id===e.unit_id);
       rows.push([
         e.emp_code, e.name, e.type, unit?.name||'', e.department, e.designation,
         e.join_date, e.phone, e.relation_name||'', e.active!==false?'Active':'Inactive',
-        ...(isAdmin ? [e.bank_salary||0, e.cash_salary||0, e.monthly_salary||0, e.bank_ac, e.bank_ifsc, e.bank_name] : [])
+        ...(isAdmin ? [e.bank_salary||0, e.cash_salary||0, e.monthly_salary||0,
+          e.basic_salary||Math.round((e.bank_salary||0)*0.5),
+          e.hra||Math.round((e.bank_salary||0)*0.5),
+          e.epf_esi===false?'No':'Yes',
+          e.bank_ac, e.bank_ifsc, e.bank_name] : [])
       ]);
     });
     SSIApp.excelDownload(rows, 'Employees', 'SSI_Employee_Export');

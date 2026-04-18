@@ -194,7 +194,7 @@ const SSIPayroll = (() => {
 
   /* ── Generate Payroll Modal ──────────────────────────────── */
   function openGenerateModal() {
-    if (!SSIApp.hasRole('ADMIN','ACCOUNTANT')) return;
+    if (!SSIApp.hasRole('ADMIN','ACCOUNTANT','ACCOUNTS')) return;
     const st    = SSIApp.getState();
     const today = new Date().toISOString().slice(0,7);
     const isAdmin = SSIApp.hasRole('ADMIN');

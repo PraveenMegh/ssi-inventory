@@ -38,6 +38,9 @@ const SSIAuth = (() => {
       { page: 'employees',  icon: '👥', label: 'Employees'  },
       { page: 'attendance', icon: '🗓️', label: 'Attendance' },
       { page: 'payroll',    icon: '💰', label: 'Payroll'    },
+    ],
+    ACCOUNTS: [
+      { page: 'payroll',    icon: '💰', label: 'Payroll'    },
     ]
   };
 
@@ -87,9 +90,9 @@ const SSIAuth = (() => {
     if (topRole) topRole.textContent = user.role;
 
     const defaultPage = {
-      ADMIN:'dashboard', STOCK:'inventory',
+      ADMIN:'dashboard',  STOCK:'inventory',
       DISPATCH:'dispatch', SALES:'orders',
-      ACCOUNTANT:'payroll'
+      ACCOUNTANT:'payroll', ACCOUNTS:'payroll'
     };
     SSIApp.navigate(defaultPage[user.role] || 'dashboard');
   }

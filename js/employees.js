@@ -128,19 +128,16 @@ const SSIEmployees = (() => {
           <td style="text-align:right;color:#059669;font-weight:600;">₹${(e.cash_salary||0).toLocaleString('en-IN')}</td>
           <td style="text-align:right;font-weight:700;border-left:2px solid #e2e8f0;">₹${(e.monthly_salary||0).toLocaleString('en-IN')}</td>
           <td style="text-align:center;">
-            ${e.epf_esi !== false
-              ? '<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">✅ Yes</span>'
-              : '<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">❌ No</span>'}
+            <span style="background:${e.epf_esi!==false?'#dcfce7':'#fee2e2'};color:${e.epf_esi!==false?'#166534':'#991b1b'};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">${e.epf_esi!==false?'Yes':'No'}</span>
           </td>
         ` : ''}
         <td><span style="background:${active?'#dcfce7':'#fee2e2'};color:${active?'#166534':'#991b1b'};padding:2px 8px;border-radius:12px;font-size:12px;">${active?'Active':'Inactive'}</span></td>
-        <td>
-          ${SSIApp.hasRole('ADMIN') ? `
-            <button class="btn btn-secondary btn-sm" onclick="SSIEmployees.openForm('${e.id}')" title="Edit">✏️</button>
-            <button class="btn btn-secondary btn-sm" onclick="SSIEmployees.toggleActive('${e.id}')" title="${active?'Deactivate':'Activate'}">${active?'🔴':'🟢'}</button>
-            <button class="btn btn-danger btn-sm" onclick="SSIEmployees.deleteEmployee('${e.id}')" title="Delete employee">🗑️</button>
-          ` : ''}
-        </td>
+        ${isAdmin ? `
+        <td style="white-space:nowrap;">
+          <button class="btn btn-secondary btn-sm" onclick="SSIEmployees.openForm('${e.id}')" title="Edit">✏️</button>
+          <button class="btn btn-secondary btn-sm" onclick="SSIEmployees.toggleActive('${e.id}')" title="${active?'Deactivate':'Activate'}">${active?'🔴':'🟢'}</button>
+          <button class="btn btn-danger btn-sm" onclick="SSIEmployees.deleteEmployee('${e.id}')" title="Delete">🗑️</button>
+        </td>` : '<td></td>'}
       </tr>`;
     }).join('');
   }

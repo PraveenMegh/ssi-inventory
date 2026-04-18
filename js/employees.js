@@ -214,7 +214,7 @@ const SSIEmployees = (() => {
                   <span style="font-size:11px;color:#6d28d9;font-weight:600;">EPF &amp; ESI applicable</span>
                 </label>
                 <input type="number" id="ef-bank-salary"
-                  value="${emp?.bank_salary ?? (emp?.monthly_salary||'')||''}"
+                  value="${emp ? (emp.bank_salary != null ? emp.bank_salary : (emp.monthly_salary||0)) : ''}"
                   placeholder="Salary credited to bank" min="0"
                   style="border-color:#818cf8;"
                   oninput="SSIEmployees._calcTotal()">
@@ -236,7 +236,7 @@ const SSIEmployees = (() => {
             <div style="margin-top:12px;padding:10px 14px;background:#1e293b;border-radius:8px;display:flex;align-items:center;justify-content:space-between;">
               <span style="color:#94a3b8;font-size:13px;font-weight:600;">Total CTC (Bank + Cash)</span>
               <span id="ef-total-salary-display" style="color:#f0fdf4;font-size:18px;font-weight:800;">
-                ₹${((emp?.bank_salary||0)+(emp?.cash_salary||0)||(emp?.monthly_salary||0)).toLocaleString('en-IN')}
+                ₹${((emp ? (((emp.bank_salary||0)+(emp.cash_salary||0)) || (emp.monthly_salary||0)) : 0)).toLocaleString('en-IN')}
               </span>
             </div>
           </div>

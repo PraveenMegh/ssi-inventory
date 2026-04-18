@@ -16,7 +16,7 @@ const SSIAttendance = (() => {
 
   /* ── render ─────────────────────────────────────────────── */
   function render(area) {
-    if (!SSIApp.hasRole('ADMIN','ACCOUNTANT')) {
+    if (!SSIApp.hasRole('ADMIN','ACCOUNTANT','ACCOUNTS')) {
       area.innerHTML = '<div class="empty-state"><div class="icon">🔒</div><p>Access Denied</p></div>';
       return;
     }
@@ -25,6 +25,7 @@ const SSIAttendance = (() => {
 
   function refresh(area) {
     const st     = SSIApp.getState();
+    const isAccountsOnly = SSIApp.hasRole('ACCOUNTS'); // ACCOUNTS: workers only
     const today  = new Date().toISOString().slice(0,10);
     const curYM  = today.slice(0,7);
 
@@ -100,6 +101,7 @@ const SSIAttendance = (() => {
     const empF    = document.getElementById('att-filter-emp')?.value   || '';
 
     let emps = (st.employees||[]).filter(e => e.active !== false);
+    if (isAccountsOnly) emps = emps.filter(e => e.type === 'WORKER'); // ACCOUNTS: workers only
     if (typeF) emps = emps.filter(e => e.type === typeF);
     if (unitF) emps = emps.filter(e => e.unit_id === unitF);
     if (empF)  emps = emps.filter(e => e.id === empF);

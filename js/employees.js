@@ -12,7 +12,7 @@ const SSIEmployees = (() => {
 
   /* ── render ─────────────────────────────────────────────── */
   function render(area) {
-    if (!SSIApp.hasRole('ADMIN','ACCOUNTANT')) {
+    if (!SSIApp.hasRole('ADMIN','ACCOUNTANT','ACCOUNTS')) {
       area.innerHTML = '<div class="empty-state"><div class="icon">🔒</div><p>Access Denied</p></div>';
       return;
     }
@@ -21,8 +21,9 @@ const SSIEmployees = (() => {
 
   function refresh(area) {
     const st   = SSIApp.getState();
-    const emps = (st.employees || []);
     const isAdmin = SSIApp.hasRole('ADMIN');
+    const isAccountsOnly = SSIApp.hasRole('ACCOUNTS'); // ACCOUNTS: workers only, no edit/delete
+    const emps = isAccountsOnly ? (st.employees || []).filter(e => e.type === 'WORKER') : (st.employees || []);
 
     area.innerHTML = `
       <div class="page-header">
@@ -87,13 +88,15 @@ const SSIEmployees = (() => {
             ${isAdmin ? '<th style="text-align:right;color:#6d28d9;">🏦 Bank Sal.</th><th style="text-align:right;color:#059669;">💵 Cash Sal.</th><th style="text-align:right;">Total CTC</th><th style="text-align:center;">EPF/ESI</th>' : ''}
             <th>Status</th><th>Actions</th>
           </tr></thead>
-          <tbody id="emp-tbody">${buildRows(emps, st, isAdmin)}</tbody>
+          <tbody id="emp-tbody">${buildRows(emps, st, isAdmin, isAccountsOnly)}</tbody>
         </table>
         <div style="padding:8px 16px;font-size:13px;color:#64748b;">Total: <b id="emp-count">${emps.filter(e=>e.active!==false).length}</b> active employees</div>
       </div>`;
   }
 
-  function buildRows(emps, st, isAdmin) {
+  function buildRows(emps, st, isAdmin, isAccountsOnly) {
+    // ACCOUNTS role: show Workers only
+    if (isAccountsOnly) emps = emps.filter(e => e.type === 'WORKER');
     const typeFilter   = document.getElementById('emp-filter-type')?.value   || '';
     const unitFilter   = document.getElementById('emp-filter-unit')?.value   || '';
     const search       = (document.getElementById('emp-filter-search')?.value || '').toLowerCase();

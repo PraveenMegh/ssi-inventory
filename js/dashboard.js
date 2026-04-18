@@ -2,7 +2,7 @@
 const SSIDashboard = (() => {
 
   function render(area) {
-    if (!SSIApp.hasRole('ADMIN')) {
+    if (!SSIApp.hasRole('ADMIN','ACCOUNTANT','ACCOUNTS')) {
       area.innerHTML = '<div class="empty-state"><div class="icon">🔒</div><p>Access Denied</p></div>';
       return;
     }

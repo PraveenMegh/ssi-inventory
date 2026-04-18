@@ -20,7 +20,7 @@ const SSIClients = (() => {
   // ── Main render ─────────────────────────────────────────────────────────────
   function render(area) {
     _searchTerm = '';
-    if (!SSIApp.hasRole('ADMIN', 'SALES')) {
+    if (!SSIApp.hasRole('ADMIN', 'SALES', 'ACCOUNTS')) {
       area.innerHTML = '<div class="empty-state"><div class="icon">🔒</div><p>Access Denied</p></div>';
       return;
     }

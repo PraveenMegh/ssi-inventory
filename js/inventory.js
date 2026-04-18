@@ -19,7 +19,7 @@ const SSIInventory = (() => {
   ];
 
   function render(area) {
-    if (!SSIApp.hasRole('ADMIN','STOCK')) {
+    if (!SSIApp.hasRole('ADMIN','STOCK','ACCOUNTS')) {
       area.innerHTML = '<div class="empty-state"><div class="icon">🔒</div><p>Access Denied</p></div>';
       return;
     }

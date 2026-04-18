@@ -8,7 +8,7 @@ const SSIUnits = (() => {
 
   // ── Render full admin page ─────────────────────────────────
   function render(area) {
-    if (!SSIApp.hasRole('ADMIN')) {
+    if (!SSIApp.hasRole('ADMIN','ACCOUNTS')) {
       area.innerHTML = '<div class="empty-state"><div class="icon">🔒</div><p>Admin access only</p></div>';
       return;
     }

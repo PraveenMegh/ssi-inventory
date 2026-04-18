@@ -40,7 +40,17 @@ const SSIAuth = (() => {
       { page: 'payroll',    icon: '💰', label: 'Payroll'    },
     ],
     ACCOUNTS: [
-      { page: 'payroll',    icon: '💰', label: 'Payroll'    },
+      { page: 'dashboard',  icon: '📊', label: 'Dashboard'        },
+      { page: 'products',   icon: '📦', label: 'Products'          },
+      { page: 'clients',    icon: '👥', label: 'Clients / Vendors'  },
+      { page: 'inventory',  icon: '🏭', label: 'Inventory'         },
+      { page: 'orders',     icon: '🛒', label: 'Sales Orders'      },
+      { page: 'dispatch',   icon: '🚚', label: 'Dispatch'          },
+      { page: 'reports',    icon: '📈', label: 'Reports'           },
+      { page: 'units',      icon: '🏢', label: 'Units / Locations' },
+      { page: 'employees',  icon: '👥', label: 'Employees'         },
+      { page: 'attendance', icon: '🗓️', label: 'Attendance'        },
+      { page: 'payroll',    icon: '💰', label: 'Payroll'           },
     ]
   };
 
@@ -92,7 +102,7 @@ const SSIAuth = (() => {
     const defaultPage = {
       ADMIN:'dashboard',  STOCK:'inventory',
       DISPATCH:'dispatch', SALES:'orders',
-      ACCOUNTANT:'payroll', ACCOUNTS:'payroll'
+      ACCOUNTANT:'payroll', ACCOUNTS:'dashboard'
     };
     SSIApp.navigate(defaultPage[user.role] || 'dashboard');
   }

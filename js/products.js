@@ -10,7 +10,7 @@ const SSIProducts = (() => {
   let _searchTerm = '';
 
   function render(area) {
-    if (!SSIApp.hasRole('ADMIN','STOCK')) { area.innerHTML='<div class="empty-state"><div class="icon">🔒</div><p>Access Denied</p></div>'; return; }
+    if (!SSIApp.hasRole('ADMIN','STOCK','ACCOUNTS')) { area.innerHTML='<div class="empty-state"><div class="icon">🔒</div><p>Access Denied</p></div>'; return; }
     _searchTerm = '';
     refresh(area);
   }

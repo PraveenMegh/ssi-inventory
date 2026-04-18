@@ -209,7 +209,7 @@ const SSIApp = {
       DISPATCH:    ['dashboard','dispatch'],
       SALES:       ['dashboard','orders','clients'],
       ACCOUNTANT:  ['dashboard','employees','attendance','payroll'],
-      ACCOUNTS:    ['payroll']
+      ACCOUNTS:    ['dashboard','products','clients','inventory','orders','dispatch','reports','units','employees','attendance','payroll']
     };
 
     if (!(allowed[u.role] || []).includes(page)) {

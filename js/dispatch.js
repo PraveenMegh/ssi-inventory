@@ -2,7 +2,7 @@
 const SSIDispatch = (() => {
 
   function render(area) {
-    if (!SSIApp.hasRole('ADMIN','DISPATCH')) {
+    if (!SSIApp.hasRole('ADMIN','DISPATCH','ACCOUNTS')) {
       area.innerHTML = '<div class="empty-state"><div class="icon">🔒</div><p>Access Denied</p></div>';
       return;
     }

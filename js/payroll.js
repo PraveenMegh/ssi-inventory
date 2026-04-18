@@ -125,9 +125,10 @@ const SSIPayroll = (() => {
     let list = (st.payroll||[]).filter(p => {
       // ACCOUNTANT and ACCOUNTS see workers only
       const emp = (st.employees||[]).find(e=>e.id===p.emp_id);
-      if (!isAdmin && emp?.type === 'STAFF') return false;
+      const empType = emp?.type || p.emp_type || '';
+      if (!isAdmin && empType === 'STAFF') return false;
       if (period  && p.period   !== period)  return false;
-      if (typeF   && emp?.type  !== typeF)   return false;
+      if (typeF   && empType    !== typeF)   return false;
       if (unitF   && emp?.unit_id !== unitF) return false;
       if (statusF && p.status   !== statusF) return false;
       return true;
@@ -165,12 +166,16 @@ const SSIPayroll = (() => {
     tbody.innerHTML = list.map(p => {
       const emp  = (st.employees||[]).find(e=>e.id===p.emp_id);
       const unit = (st.units||[]).find(u=>u.id===emp?.unit_id);
+      const dName = emp?.name     || p.emp_name  || '—';
+      const dCode = emp?.emp_code || p.emp_code  || '';
+      const dType = emp?.type     || p.emp_type  || '';
+      const dUnit = unit?.name    || p.unit_name || '—';
       const st_badge = _statusBadge(p.status);
       return `<tr>
         <td style="white-space:nowrap;">${_fmtPeriod(p.period)}</td>
-        <td><b>${emp?.name||'?'}</b><br><span style="font-size:11px;color:#64748b;">${emp?.emp_code||''}</span></td>
-        <td><span style="background:${emp?.type==='STAFF'?'#FDECEA':'#dcfce7'};color:${emp?.type==='STAFF'?'#922B21':'#166534'};padding:2px 7px;border-radius:10px;font-size:11px;">${emp?.type||''}</span></td>
-        <td>${unit?.name||'—'}</td>
+        <td><b>${dName}</b><br><span style="font-size:11px;color:#64748b;">${dCode}</span></td>
+        <td><span style="background:${dType==='STAFF'?'#FDECEA':'#dcfce7'};color:${dType==='STAFF'?'#922B21':'#166534'};padding:2px 7px;border-radius:10px;font-size:11px;">${dType}</span></td>
+        <td>${dUnit}</td>
         <td style="text-align:right;">₹${_fmt(p.monthly_salary)}</td>
         <td style="text-align:center;">${p.present_days}</td>
         <td style="text-align:center;">${p.half_days}</td>
@@ -312,6 +317,10 @@ const SSIPayroll = (() => {
       const rec = {
         id:             existing?.id || SSIApp.uid(),
         emp_id:         emp.id,
+        emp_name:       emp.name||'',
+        emp_code:       emp.emp_code||'',
+        emp_type:       emp.type||'',
+        unit_name:      (SSIApp.getState().units||[]).find(u=>u.id===emp.unit_id)?.name||'',
         period:         month,
         monthly_salary: emp.monthly_salary||0,
         working_days:   daysInMonth,
@@ -368,7 +377,7 @@ const SSIPayroll = (() => {
     const emp  = (st.employees||[]).find(e=>e.id===rec.emp_id);
 
     SSIApp.modal(`
-      <h3 style="margin-bottom:14px;">✏️ Edit Payroll — ${emp?.name||''} (${_fmtPeriod(rec.period)})</h3>
+      <h3 style="margin-bottom:14px;">✏️ Edit Payroll — ${emp?.name||rec.emp_name||''} (${_fmtPeriod(rec.period)})</h3>
       <div style="background:#f8fafc;border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div>Gross Pay: <b>₹${_fmt(rec.gross_pay)}</b></div>
         <div>OT Amount: <b>₹${_fmt(rec.ot_amount)}</b></div>
@@ -477,6 +486,11 @@ const SSIPayroll = (() => {
     if (!rec) return;
     const emp  = (st.employees||[]).find(e=>e.id===rec.emp_id);
     const unit = (st.units||[]).find(u=>u.id===emp?.unit_id);
+    // Fallback to stored snapshot when employee re-imported with new ID
+    const _n = emp?.name     || rec.emp_name  || '—';
+    const _c = emp?.emp_code || rec.emp_code  || '—';
+    const _t = emp?.type     || rec.emp_type  || '—';
+    const _u = unit?.name    || rec.unit_name || '—';
     const perDay = ((rec.monthly_salary||0)/(rec.working_days||30)).toFixed(2);
 
     const slip = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Salary Slip</title>
@@ -495,7 +509,7 @@ const SSIPayroll = (() => {
     <h2>SSI Group — Salary Slip</h2>
     <div class="sub">Unit: ${unit?.name||'—'} &nbsp;|&nbsp; Month: <b>${_fmtPeriod(rec.period)}</b></div>
     <table>
-      <tr><td class="row-label">Employee Name</td><td>${emp?.name||'—'}</td><td class="row-label">Employee Code</td><td>${emp?.emp_code||'—'}</td></tr>
+      <tr><td class="row-label">Employee Name</td><td>${_n}</td><td class="row-label">Employee Code</td><td>${_c}</td></tr>
       <tr><td class="row-label">Designation</td><td>${emp?.designation||'—'}</td><td class="row-label">Department</td><td>${emp?.department||'—'}</td></tr>
       <tr><td class="row-label">Category</td><td>${emp?.type||'—'}</td><td class="row-label">Bank Account</td><td>${emp?.bank_ac||'—'}</td></tr>
     </table>
@@ -539,7 +553,7 @@ const SSIPayroll = (() => {
     if (!rec) return;
     if (rec.status === 'PAID') { SSIApp.toast('❌ Cannot delete a PAID payroll record'); return; }
     const emp = (st.employees||[]).find(e=>e.id===rec.emp_id);
-    const ok  = await SSIApp.confirm(`Delete payroll for ${emp?.name||'this employee'} (${_fmtPeriod(rec.period)})? This cannot be undone.`);
+    const ok  = await SSIApp.confirm(`Delete payroll for ${emp?.name||rec.emp_name||'this employee'} (${_fmtPeriod(rec.period)})? This cannot be undone.`);
     if (!ok) return;
     st.payroll = st.payroll.filter(p=>p.id!==recId);
     await SSIApp.saveState(st);
@@ -566,7 +580,7 @@ const SSIPayroll = (() => {
       const emp  = (st.employees||[]).find(e=>e.id===p.emp_id);
       const unit = (st.units||[]).find(u=>u.id===emp?.unit_id);
       rows.push([
-        p.period, emp?.emp_code||'', emp?.name||'', emp?.type||'', unit?.name||'',
+        p.period, emp?.emp_code||p.emp_code||'', emp?.name||p.emp_name||'', emp?.type||p.emp_type||'', unit?.name||p.unit_name||'',
         p.monthly_salary, p.present_days, p.half_days, p.leave_days, p.paid_leaves,
         p.ot_hours, p.ot_amount, p.deductions, p.gross_pay, p.net_pay,
         p.status, p.payment_mode||'', p.payment_date||'', p.remarks||''
